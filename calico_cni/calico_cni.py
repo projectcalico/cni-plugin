@@ -35,7 +35,7 @@ LOG_DIR = '/var/log/calico/calico-cni'
 
 ORCHESTRATOR_ID = "cni"
 HOSTNAME = socket.gethostname()
-NETNS_ROOT = '/var/lib/rkt/pods/run'
+RKT_NETNS_ROOT = '/var/lib/rkt/pods/run'
 
 CNI_NETNS_ROOT = os.getenv("CNI_NETNS_ROOT", "")
 
@@ -73,10 +73,10 @@ def create(args):
     if CNI_NETNS_ROOT:
         # Allow the user to configure a netns path with env var CNI_NETNS_ROOT
         # This workaround will be removed once the CNI issue is fixed
-        netns_path = '%s/%s/%s' % (CNI_NETNS_ROOT, netns)
+        netns_path = '%s/%s' % (CNI_NETNS_ROOT, netns)
     else:
         # If a user does not configure a netns path assume the user is using rkt
-        netns_path = '%s/%s/%s' % (NETNS_ROOT, container_id, netns)
+        netns_path = '%s/%s/%s' % (RKT_NETNS_ROOT, container_id, netns)
 
     endpoint = _create_calico_endpoint(container_id=container_id,
                                        netns_path=netns_path,
@@ -393,7 +393,7 @@ if __name__ == '__main__':
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     hdlr.setFormatter(formatter)
     _log.addHandler(hdlr)
-    _log.setLevel(logging.INFO)
+    _log.setLevel(logging.DEBUG)
 
     # Environment
     env = os.environ.copy()

@@ -1,6 +1,6 @@
 # Calico Networking for CNI
 
-`calico-cni` offers basic Calico networking as a CNI plugin.
+`calico-cni` offers Calico networking as a CNI plugin.
 
 ## Building the plugin locally
 
@@ -8,10 +8,11 @@ To build the Calico CNI Plugin locally, clone this repository and run `make`.  T
 
 ## Configuration
 
-* Configure your network with a `*.conf` file in `/etc/cni/net.d/`, or if you choose to put the `*.conf` file in a different location, be sure to specify the path with the environment variable `CNI_PATH`. 
-    - Each Network should be given a unique `"name"`
-    - Each Calico Network config specifies  `"calico"` as `"type"`.
-    - The `"ipam"` section must include the key `"type": "calico-ipam"` and specify an IP Pool in `"subnet"`
+Configure your network with a `*.conf` file. 
+* The default file location is `/etc/cni/net.d/`. If you choose to put the net configuration file in a different location, be sure to specify the path with the environment variable `CNI_PATH`. 
+* Each network should have their own configuration file and must be given a unique `"name"`.
+* To call the Calico CNI plugin, set the `"type"` to `"calico"`.
+* The `"ipam"` section must include the key `"type": "calico-ipam"` and specify an IP Pool in `"subnet"`. An IP address will be allocated from the indicated `"subnet"` pool.
 ```
 # 10-calico.conf
 
@@ -24,3 +25,7 @@ To build the Calico CNI Plugin locally, clone this repository and run `make`.  T
     }
 }
 ```
+
+## Networking Behavior
+
+Calico will allocate an available IP within the specified subnet pool and enforce the default Calico networking rules on containers. The default behavior is to allow traffic only from other containers in the network. For each network with a unique `"name"` parameter (as shown above), Calico will create a single profile that will be applied to each container added to that network.
