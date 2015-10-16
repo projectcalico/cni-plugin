@@ -31,17 +31,19 @@ from pycalico.datastore import IF_PREFIX
 from pycalico.datastore_errors import PoolNotFound
 
 ETCD_AUTHORITY_ENV = 'ETCD_AUTHORITY'
-LOG_DIR = '/var/log/calico/calico-rkt'
+LOG_DIR = '/var/log/calico/calico-cni'
 
-ORCHESTRATOR_ID = "rkt"
+ORCHESTRATOR_ID = "cni"
 HOSTNAME = socket.gethostname()
-NETNS_ROOT = '/var/lib/rkt/pods/run'
+RKT_NETNS_ROOT = '/var/lib/rkt/pods/run'
+
+CNI_NETNS_ROOT = os.getenv("CNI_NETNS_ROOT", "")
 
 _log = logging.getLogger(__name__)
 datastore_client = IPAMClient()
 
 
-def calico_rkt(args):
+def calico_cni(args):
     """
     Orchestrate top level function
 
@@ -55,8 +57,8 @@ def calico_rkt(args):
 
 def create(args):
     """"
-    Handle rkt pod-create event.
-    Print allocated IP as json to STDOUT (req for rkt)
+    Handle pod-create event.
+    Print allocated IP as json to STDOUT
 
     :param args: dict of values to pass to other functions (see: validate_args)
     """
@@ -67,7 +69,14 @@ def create(args):
     subnet = args['subnet']
 
     _log.info('Configuring pod %s' % container_id)
-    netns_path = '%s/%s/%s' % (NETNS_ROOT, container_id, netns)
+
+    if CNI_NETNS_ROOT:
+        # Allow the user to configure a netns path with env var CNI_NETNS_ROOT
+        # This workaround will be removed once the CNI issue is fixed
+        netns_path = '%s/%s' % (CNI_NETNS_ROOT, netns)
+    else:
+        # If a user does not configure a netns path assume the user is using rkt
+        netns_path = '%s/%s/%s' % (RKT_NETNS_ROOT, container_id, netns)
 
     endpoint = _create_calico_endpoint(container_id=container_id,
                                        netns_path=netns_path,
@@ -83,7 +92,7 @@ def create(args):
                 "ip": "%s" % endpoint.ipv4_nets.copy().pop()
             }
         })
-    _log.info('Dumping info to rkt: %s' % dump)
+    _log.info('Dumping info to stdout: %s' % dump)
     print(dump)
 
     _log.info('Finished Creating pod %s' % container_id)
@@ -157,7 +166,7 @@ def _container_add(hostname, orchestrator_id, container_id, netns_path, interfac
     Return Endpoint object and newly allocated IP
 
     :param hostname (str): Host for enndpoint allocation
-    :param orchestrator_id (str): Specifies orchestrator ('rkt')
+    :param orchestrator_id (str): Specifies orchestrator
     :param container_id (str):
     :param netns_path (str): namespace path
     :param interface (str): iface to use
@@ -189,7 +198,7 @@ def _container_remove(hostname, orchestrator_id, container_id):
     Remove the indicated container on this host from Calico networking
 
     :param hostname (str): Host for enndpoint allocation
-    :param orchestrator_id (str): Specifies orchestrator ('rkt')
+    :param orchestrator_id (str): Specifies orchestrator
     :param container_id (str):
     """
     # Find the endpoint ID. We need this to find any ACL rules
@@ -380,11 +389,11 @@ if __name__ == '__main__':
     # Setup logger
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
-    hdlr = logging.FileHandler(filename=LOG_DIR+'/calico-rkt.log')
+    hdlr = logging.FileHandler(filename=LOG_DIR+'/calico-cni.log')
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     hdlr.setFormatter(formatter)
     _log.addHandler(hdlr)
-    _log.setLevel(logging.INFO)
+    _log.setLevel(logging.DEBUG)
 
     # Environment
     env = os.environ.copy()
@@ -397,4 +406,4 @@ if __name__ == '__main__':
     args = validate_args(env, conf_json)
 
     # Call plugin
-    calico_rkt(args)
+    calico_cni(args)

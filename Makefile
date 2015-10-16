@@ -4,38 +4,38 @@ BUILD_FILES=Dockerfile requirements.txt
 
 default: all
 all: test
-binary: dist/calico_rkt
+binary: dist/calico_cni
 test: ut
 
 # Build a new docker image to be used by binary or tests
-rktbuild.created: $(BUILD_FILES)
-	docker build -t calico/rkt-build .
-	touch rktbuild.created
+cnibuild.created: $(BUILD_FILES)
+	docker build -t calico/cni-build .
+	touch cnibuild.created
 
-dist/calico_rkt: rktbuild.created
+dist/calico_cni: cnibuild.created
 	mkdir -p dist
 	chmod 777 `pwd`/dist
 	
-	# Build the rkt plugin
+	# Build the cni plugin
 	docker run \
 	-u user \
-	-v `pwd`/calico_rkt:/code/calico_rkt \
+	-v `pwd`/calico_cni:/code/calico_cni \
 	-v `pwd`/dist:/code/dist \
-	-e PYTHONPATH=/code/calico_rkt \
-	calico/rkt-build pyinstaller calico_rkt/calico_rkt.py -a -F -s --clean
+	-e PYTHONPATH=/code/calico_cni \
+	calico/cni-build pyinstaller calico_cni/calico_cni.py -a -F -s --clean
 
-ut: dist/calico_rkt
-	docker run --rm -v `pwd`/calico_rkt:/code/calico_rkt \
+ut: dist/calico_cni
+	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
 	-v `pwd`/nose.cfg:/code/nose.cfg \
-	calico/rkt-build bash -c \
-	'>/dev/null 2>&1 & PYTHONPATH=/code/calico_rkt \
-	nosetests calico_rkt/tests -c nose.cfg'
+	calico/cni-build bash -c \
+	'>/dev/null 2>&1 & PYTHONPATH=/code/calico_cni \
+	nosetests calico_cni/tests -c nose.cfg'
 
 clean:
 	-rm -f *.created
 	find . -name '*.pyc' -exec rm -f {} +
 	-rm -rf dist
 	-docker rm -f calico-build
-	-docker rmi calico/rkt-build
+	-docker rmi calico/cni-build
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 
