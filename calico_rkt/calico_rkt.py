@@ -14,25 +14,23 @@
 
 from __future__ import print_function
 import socket
-import functools
 import logging
 import json
 import os
 import sys
 
-from subprocess import check_output, CalledProcessError, check_call
-from netaddr import IPAddress, IPNetwork, AddrFormatError
+from subprocess32 import CalledProcessError,  Popen, PIPE
+from netaddr import IPAddress, AddrFormatError
 
 from pycalico import netns
-from pycalico.ipam import IPAMClient, SequentialAssignment
-from pycalico.netns import Namespace
-from pycalico.datastore_datatypes import Rules, IPPool
-from pycalico.datastore import IF_PREFIX
-from pycalico.datastore_errors import PoolNotFound
+from pycalico.netns import Namespace, remove_veth
+from pycalico.datastore import DatastoreClient
+from pycalico.datastore_errors import MultipleEndpointsMatch
 
+# Calico Configuration Constants
 ETCD_AUTHORITY_ENV = 'ETCD_AUTHORITY'
 
-ORCHESTRATOR_ID = "rkt"
+ORCHESTRATOR_ID = "cni"
 HOSTNAME = socket.gethostname()
 NETNS_ROOT = '/var/lib/rkt/pods/run'
 
@@ -58,10 +56,9 @@ CNI_CMD_DELETE = "DEL"
 
 class CniPlugin(object):
     """
-    Class which encapsulates the function of a CNI 
-    plugin.
+    Class which encapsulates the function of a CNI plugin.
     """
-    def __init__(self, network_config, env, calico_config):
+    def __init__(self, network_config, env):
         self.network_config = network_config
         """
         Network config as provided in the CNI network file passed in
@@ -92,7 +89,7 @@ class CniPlugin(object):
         The container's ID in the containerizer. Required.
         """
 
-        self.netns = env[CNI_NETNS_ENV]
+        self.cni_netns = env[CNI_NETNS_ENV]
         """
         Relative path to the network namespace of this container.
         """
@@ -113,7 +110,7 @@ class CniPlugin(object):
         Path in which to search for CNI plugins.
         """
 
-        self.network_name = network_config[TODO]
+        self.network_name = network_config["name"]
         """
         Name of the network from the provided network config file.
         """
@@ -125,14 +122,16 @@ class CniPlugin(object):
         """
 
         # TODO - What config do we need here and how do we get it?
-        self.calico_config = calico_config
+        # self.calico_config = calico_config
 
     def parse_cni_args(self, cni_args):
-        """
-        Parses the given CNI_ARGS string into key value pairs and 
-        returns a dictionary containing the arguments.
+        """Parses the given CNI_ARGS string into key value pairs
+        and returns a dictionary containing the arguments.
 
         e.g "FOO=BAR;ABC=123" -> {"FOO": "BAR", "ABC": "123"}
+
+        :param cni_args
+        :return: args_to_return - dictionary of parsed cni args
         """
         # Dictionary to return.
         args_to_return = {}
@@ -141,17 +140,19 @@ class CniPlugin(object):
         _log.debug("Parsing CNI_ARGS: %s", cni_args)
         for arg in cni_args.split(";"):
             _log.debug("\tParsing CNI_ARG: %s", arg)
-            k,v = arg.split("=")
+            k, v = arg.split("=")
             args_to_return[k] = v
         return args_to_return
 
     def execute(self):
-        """
-        Executes this plugin.  Handles unexpected Exceptions
-        in plugin execution. Returns the plugin return code.
+        """Executes this plugin.
+        Handles unexpected Exceptions in plugin execution.
+
+        :return The plugin return code.
         """
         rc = 0
         try:
+            _log.debug("Starting plugin execution.")
             self._execute()
         except SystemExit, e:
             # SystemExit indicates an error that was handled earlier
@@ -167,19 +168,16 @@ class CniPlugin(object):
             return rc
 
     def _execute(self):
-        """
-        Priavte method to execute this plugin. Uses the given CNI_COMMAND to 
-        determine which action to take.
+        """Private method to execute this plugin.
+
+        Uses the given CNI_COMMAND to determine which action to take.
+
+        :return: None.
         """
         if self.command == CNI_CMD_ADD:
-            # If an add fails, we need to clean up any changes we may
+            # TODO - If an add fails, we need to clean up any changes we may
             # have made.
-            try:
-                self.add()
-            except BaseException:
-                _log.exception("Failed to add container - cleaning up")
-                # TODO - Clean up after a failure.
-                sys.exit(1)
+            self.add()
         else:
             assert self.command == CNI_CMD_DELETE, \
                     "Invalid command: %s" % self.command
@@ -189,112 +187,270 @@ class CniPlugin(object):
         """"Handles CNI_CMD_ADD requests. 
 
         Configures Calico networking and prints required json to stdout.
+
+        :return: None.
         """
         _log.info('Configuring pod %s' % self.container_id)
 
-        # TODO: Can we replace NETNS_ROOT with cwd?
-        netns_path = '%s/%s/%s' % (NETNS_ROOT, self.container_id, netns)
-
         # Step 1: Assign an IP address using the given IPAM plugin.
+        assigned_ip = self._assign_ip()
 
         # Step 2: Create the Calico endpoint object.
+        endpoint = self._create_endpoint(assigned_ip)
 
         # Step 3: Provision the veth for this endpoint.
+        endpoint = self._provision_veth(endpoint)
         
         # Step 4: Provision / set profile on the created endpoint.
+        self._set_profile_on_endpoint(endpoint, self.network_name)
 
         # Step 5: If all successful, print the IPAM plugin's output to stdout.
+        dump = json.dumps(self.ipam_result)
+        _log.info("Printing CNI result to stdout: %s", dump)
+        print(dump)
+
+        _log.info("Finished creating pod %s", self.container_id)
     
-    def delete():
+    def delete(self):
         """Handles CNI_CMD_DELETE requests.
 
         Remove this pod from Calico networking.
+
+        :return: None.
         """
-        _log.info('Deleting pod %s' % container_id)
+        _log.info('Deleting pod %s' % self.container_id)
 
-        # Step 1: Get the Calico endpoint for this workload. If it does not
+        # Step 1: Remove any IP assignments.
+        self._release_ip()
+
+        # Step 2: Get the Calico endpoint for this workload. If it does not
         # exist, log a warning and exit successfully.
+        endpoint = self._get_endpoint()
+        if not endpoint:
+            _log.info("No more to do since endpoint does not exist.",
+                       self.container_id)
+            sys.exit(0)
 
-        # Step 2: The endpoint exists - remove any IP assignments. 
-
-        # Step 3: Delete the veth interface for this endpoint. 
+        # Step 3: Delete the veth interface for this endpoint.
+        _log.info("Removing veth for endpoint %s", endpoint.name)
+        netns.remove_veth(endpoint.name)
 
         # Step 4: Delete the Calico endpoint.
+        self._remove_endpoint()
 
-        # Step 5: Delete any profiles for this endpoint - TODO: This
-        # is racey and needs further thinking.  For now, maybe we don't delete
-        # profiles.
+        # Step 5: Delete any profiles for this endpoint
+        # TODO: This is racey and needs further thinking.
+        self._remove_profile(self.network_name)
+
+        _log.info('Finished deleting pod %s' % self.container_id)
 
     def _assign_ip(self):
-        """
-        Assigns and returns an IPv4 address using the IPAM plugin 
+        """Assigns and returns an IPv4 address using the IPAM plugin
         specified in the network config file.
-        :return: The assigned IP address.
+
+        :return: IPAddress - The assigned IP address.
         """
         # TODO - Handle errors thrown by IPAM plugin
-        result = self._call_ipam_plugin()
-        _log.debug("IPAM plugin result: %s", result)
+        self.ipam_result = self._call_ipam_plugin()
+        _log.debug("IPAM plugin result: %s", self.ipam_result)
 
         try:
             # Load the response and get the assigned IP address.
-            result = json.loads(result)
+            self.ipam_result = json.loads(self.ipam_result)
         except ValueError:
             _log.exception("Failed to parse IPAM response, exiting")
             sys.exit(1)
 
-        # The request was successful.  Get the IP.
-        _log.info("IPAM result: %s", result)
-        return IPNetwork(result["ipv4"]["ip"])
+        try:
+            assigned_ip = IPAddress(self.ipam_result["ip4"]["ip"])
+        except KeyError:
+            _log.error("IPAM plugin did not return an IPv4 address.")
+            sys.exit(1)
+        except (AddrFormatError, ValueError):
+            _log.error("Invalid IP address %s", self.ipam_result["ip4"]["ip"])
+            sys.exit(1)
+
+        return assigned_ip
 
     def _release_ip(self):
-        """
-        Releases the IP address for this container using the IPAM plugin 
+        """Releases the IP address(es) for this container using the IPAM plugin
         specified in the network config file.
-        :return:
+
+        :return: None.
         """
         # TODO - Handle errors thrown by IPAM plugin
-        _log.debug("Releasing IP address")
+        _log.debug("Releasing IP address with IPAM plugin")
         try:
             result = self._call_ipam_plugin()
             _log.debug("IPAM plugin result: %s", result)
         except CalledProcessError:
-            _log.exception("IPAM plugin failed to un-assign IP address.")
+            _log.exception("IPAM plugin failed to release IP address.")
 
-    def _call_ipam_plugin(self, config):
-        """
-        Calls through to the specified IPAM plugin.
+    def _call_ipam_plugin(self):
+        """Calls through to the specified IPAM plugin.
     
-        :param config: IPAM config as specified in the CNI network 
+        Utilizes the IPAM config as specified in the CNI network
         configuration file.  A dictionary with the following form:
             {
               type: <IPAM TYPE>
             }
+
         :return: Response from the IPAM plugin.
         """
-        # Get the plugin type and location.
-        plugin_type = config['type']
-        _log.debug("IPAM plugin type: %s.  Plugin directory: %s", 
-                   plugin_type, self.cni_path)
-    
         # Find the correct plugin based on the given type.
-        plugin_path = os.path.abspath(os.path.join(plugin_dir, plugin_type))
-        _log.debug("Using IPAM plugin at: %s", plugin_path)
-    
-        if not os.path.isfile(plugin_path):
-            _log.error("Could not find IPAM plugin: %s", plugin_path)
+        plugin_path = self._find_ipam_plugin()
+        if not plugin_path:
+            _log.error("Could not find IPAM plugin of type %s in path %s.",
+                       self.network_config['ipam']['type'], self.cni_path)
             sys.exit(1)
     
         # Execute the plugin and return the result.
+        _log.debug("Using IPAM plugin at: %s", plugin_path)
         p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE)
-        stdout, stderr= p.communicate(json.dumps(CONFIG))
+        stdout, stderr = p.communicate(json.dumps(self.network_config))
         _log.debug("IPAM plugin output: \nstdout: %s\nstderr: %s", 
                    stdout, stderr)
         return stdout
 
+    def _create_endpoint(self, assigned_ip):
+        """Creates an endpoint in the Calico datastore with the client.
 
-def configure_logging(log_level=logging.INFO):
-    """
-    Configures logging for this file.
+        :param assigned_ip - IPAddress that has been already allocated
+        :return Calico endpoint object
+        """
+        try:
+            endpoint = self._client.create_endpoint(HOSTNAME,
+                                                    ORCHESTRATOR_ID,
+                                                    self.container_id,
+                                                    [assigned_ip])
+        except AddrFormatError:
+            _log.error("This node is not configured for IPv%s", assigned_ip.version)
+            # TODO - call release_ip / cleanup
+            sys.exit(1)
+        except KeyError:
+            _log.error("Unable to create endpoint. BGP configuration not found."
+                       " Are the Calico services running?")
+            # TODO - call release_ip / cleanup
+            sys.exit(1)
+
+        _log.info("Created Calico endpoint with IP address %s", assigned_ip)
+        return endpoint
+
+    def _remove_endpoint(self):
+        """Removes the given endpoint from the Calico datastore
+
+        :param endpoint:
+        :return: None
+        """
+        try:
+            _log.info("Removing endpoint from the Calico datastore.")
+            self._client.remove_workload(hostname=HOSTNAME,
+                                         orchestrator_id=ORCHESTRATOR_ID,
+                                         workload_id=self.container_id)
+        except KeyError:
+            _log.warning("Unable to remove workload with ID %s from datastore.",
+                       self.container_id)
+
+    def _provision_veth(self, endpoint):
+        """Provisions veth for given endpoint.
+
+        Uses the netns relative path passed in through CNI_NETNS_ENV and
+        interface passed in through CNI_IFNAME_ENV.
+
+        :param endpoint
+        :return Calico endpoint object
+        """
+        netns_path = os.path.abspath(os.path.join(os.getcwd(), self.cni_netns))
+        endpoint.mac = endpoint.provision_veth(Namespace(netns_path),
+                                               self.interface)
+        self._client.set_endpoint(endpoint)
+        _log.info("Provisioned veth for endpoint using netns path %s on "
+                  "interface %s", netns_path, self.interface)
+        return endpoint
+
+    def _set_profile_on_endpoint(self, endpoint, profile_name):
+        """Sets given profile_name on given endpoint.
+
+        If profile for given profile_name does not exist, create a profile.
+
+        :param endpoint
+        :param profile_name
+        :return: None.
+        """
+        if not self._client.profile_exists(profile_name):
+            _log.info("Creating new profile %s.", profile_name)
+            self._client.create_profile(profile_name)
+
+        _log.info("Setting profile %s on endpoint.", profile_name)
+        self._client.set_profiles_on_endpoint(profile_names=[profile_name],
+                                              endpoint_id=endpoint.endpoint_id)
+
+    def _remove_profile(self, profile_name):
+        """Remove the profile from datastore (not implemented).
+
+        This function is not implemented until we come up with a way to deal
+        with the race condition that exists between removing a profile and
+        creating a new one of the same name
+
+        :param profile_name: Name of profile to remove.
+        :return: None.
+        """
+        pass
+
+    def _get_endpoint(self):
+        """Gets endpoint matching the container_id.
+
+        Return None if no endpoint is found.
+        Exits with an error if multiple endpoints are found.
+
+        :param container_id:
+        :return: Calico endpoint object if found, None if not found
+        """
+        try:
+            _log.info("Retrieving endpoint that matches container ID %s",
+                      self.container_id)
+            endpoint = self._client.get_endpoint(
+                hostname=HOSTNAME,
+                orchestrator_id=ORCHESTRATOR_ID,
+                workload_id=self.container_id
+            )
+        except KeyError:
+            _log.warning("No endpoint found matching ID %s", self.container_id)
+            endpoint = None
+        except MultipleEndpointsMatch:
+            _log.error("Multiple endpoints found matching ID %s", self.container_id)
+            sys.exit(1)
+
+        return endpoint
+
+    def _find_ipam_plugin(self):
+        """Locates IPAM plugin binary in plugin path and returns absolute path
+        of plugin if found; if not found returns an empty string.
+
+        IPAM plugin type is set in the network config file.
+        The plugin path is the CNI path passed through the environment variable
+        CNI_PATH.
+
+        :rtype : str
+        :return: plugin_path - absolute path of IPAM plugin binary
+        """
+        plugin_type = self.network_config['ipam']['type']
+        plugin_path = ""
+        for path in self.cni_path.split(":"):
+            _log.debug("Looking for plugin %s in path %s.", plugin_type, path)
+            temp_path = os.path.abspath(os.path.join(path, plugin_type))
+            if os.path.isfile(temp_path):
+                _log.debug("Found plugin %s in path %s.", plugin_type, path)
+                plugin_path = temp_path
+                break
+
+        return str(plugin_path)
+
+
+def configure_logging(log_level=logging.DEBUG):
+    """Configures logging for this file.
+
+    :return None.
     """
     # If the logging directory doesn't exist, create it.
     if not os.path.exists(LOG_DIR):
@@ -323,15 +479,16 @@ def main():
 
     # Get the CNI environment. 
     env = os.environ.copy()
+    _log.debug("Loaded environment:\n%s", json.dumps(env, indent=2))
 
     # Read the network config file from stdin. 
     config_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
-    network_config = json.loads(conf_raw).copy()
+    network_config = json.loads(config_raw).copy()
     _log.debug("Loaded network config:\n%s", json.dumps(network_config, indent=2))
 
     # Create the plugin, passing in the network config, environment,
     # and the Calico configuration options.
-    plugin = CniPlugin(network_config, env, calico_config)
+    plugin = CniPlugin(network_config, env)
 
     # Call the CNI plugin.
     sys.exit(plugin.execute())
