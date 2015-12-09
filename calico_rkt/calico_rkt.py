@@ -14,20 +14,17 @@
 
 from __future__ import print_function
 import socket
-import functools
 import logging
 import json
 import os
 import sys
 
-from subprocess import check_output, CalledProcessError, check_call, Popen, PIPE
-from netaddr import IPAddress, IPNetwork, AddrFormatError
+from subprocess32 import CalledProcessError,  Popen, PIPE
+from netaddr import IPAddress, AddrFormatError
 
 from pycalico import netns
-from pycalico.ipam import IPAMClient, SequentialAssignment
 from pycalico.netns import Namespace, remove_veth
-from pycalico.datastore_datatypes import Rules, IPPool
-from pycalico.datastore import IF_PREFIX, DatastoreClient
+from pycalico.datastore import DatastoreClient
 from pycalico.datastore_errors import MultipleEndpointsMatch
 
 # Calico Configuration Constants
@@ -92,7 +89,7 @@ class CniPlugin(object):
         The container's ID in the containerizer. Required.
         """
 
-        self.netns = env[CNI_NETNS_ENV]
+        self.cni_netns = env[CNI_NETNS_ENV]
         """
         Relative path to the network namespace of this container.
         """
@@ -177,14 +174,9 @@ class CniPlugin(object):
         :return: None.
         """
         if self.command == CNI_CMD_ADD:
-            # If an add fails, we need to clean up any changes we may
+            # TODO - If an add fails, we need to clean up any changes we may
             # have made.
-            try:
-                self.add()
-            except BaseException:
-                _log.exception("Failed to add container - cleaning up")
-                # TODO - Clean up after a failure.
-                sys.exit(1)
+            self.add()
         else:
             assert self.command == CNI_CMD_DELETE, \
                     "Invalid command: %s" % self.command
@@ -227,12 +219,16 @@ class CniPlugin(object):
         """
         _log.info('Deleting pod %s' % self.container_id)
 
-        # Step 1: Get the Calico endpoint for this workload. If it does not
+        # Step 1: Remove any IP assignments.
+        self._release_ip()
+
+        # Step 2: Get the Calico endpoint for this workload. If it does not
         # exist, log a warning and exit successfully.
         endpoint = self._get_endpoint()
-
-        # Step 2: The endpoint exists - remove any IP assignments.
-        self._release_ips()
+        if not endpoint:
+            _log.info("No more to do since endpoint does not exist.",
+                       self.container_id)
+            sys.exit(0)
 
         # Step 3: Delete the veth interface for this endpoint.
         _log.info("Removing veth for endpoint %s", endpoint.name)
@@ -268,22 +264,20 @@ class CniPlugin(object):
         _log.info("IPAM result: %s", self.ipam_result)
         return IPAddress(self.ipam_result["ip4"]["ip"])
 
-    def _release_ips(self, ip_list=[]):
+    def _release_ip(self):
         """Releases the IP address(es) for this container using the IPAM plugin
         specified in the network config file.
 
         :param ip_list (optional) - List of IPs to release
         :return: None.
         """
-        # TODO - add ips in ip_list to network_config attribute
-        # (network_config['ipam']['ips']
         # TODO - Handle errors thrown by IPAM plugin
         _log.debug("Releasing IP address with IPAM plugin")
         try:
             result = self._call_ipam_plugin()
             _log.debug("IPAM plugin result: %s", result)
         except CalledProcessError:
-            _log.exception("IPAM plugin failed to un-assign IP address.")
+            _log.exception("IPAM plugin failed to release IP address.")
 
     def _call_ipam_plugin(self):
         """Calls through to the specified IPAM plugin.
@@ -321,12 +315,12 @@ class CniPlugin(object):
         except AddrFormatError:
             _log.error("Unable to create endpoint. An invalid IP address was "
                        "returned from IPAM plugin: %s", assigned_ip)
-            # TODO - call release_ips / cleanup
+            # TODO - call release_ip / cleanup
             sys.exit(1)
         except KeyError:
             _log.error("Unable to create endpoint. BGP configuration not found."
                        " Are the Calico services running?")
-            # TODO - call release_ips / cleanup
+            # TODO - call release_ip / cleanup
             sys.exit(1)
 
         _log.info("Created Calico endpoint with IP address %s", assigned_ip)
@@ -344,9 +338,8 @@ class CniPlugin(object):
                                          orchestrator_id=ORCHESTRATOR_ID,
                                          workload_id=self.container_id)
         except KeyError:
-            _log.error("Unable to remove workload with ID %s from datastore.",
+            _log.warning("Unable to remove workload with ID %s from datastore.",
                        self.container_id)
-            sys.exit(1)
 
     def _provision_veth(self, endpoint):
         """Provisions veth for given endpoint.
@@ -357,7 +350,7 @@ class CniPlugin(object):
         :param endpoint
         :return Calico endpoint object
         """
-        netns_path = os.path.abspath(os.path.join(os.getcwd(), self.netns))
+        netns_path = os.path.abspath(os.path.join(os.getcwd(), self.cni_netns))
         endpoint.mac = endpoint.provision_veth(Namespace(netns_path),
                                                self.interface)
         self._client.set_endpoint(endpoint)
@@ -402,11 +395,11 @@ class CniPlugin(object):
     def _get_endpoint(self):
         """Gets endpoint matching the container_id.
 
-        Exits gracefully if no endpoint is found.
+        Return None if no endpoint is found.
         Exits with an error if multiple endpoints are found.
 
         :param container_id:
-        :return: Calico endpoint object
+        :return: Calico endpoint object if found, None if not found
         """
         try:
             _log.info("Retrieving endpoint that matches container ID %s",
@@ -416,7 +409,7 @@ class CniPlugin(object):
                                            workload_id=self.container_id)
         except KeyError:
             _log.warning("No endpoint found matching ID %s", self.container_id)
-            sys.exit(0)
+            return
         except MultipleEndpointsMatch:
             _log.error("Multiple endpoints found matching ID %s", self.container_id)
             sys.exit(1)
@@ -431,7 +424,7 @@ class CniPlugin(object):
                 plugin_path = path
                 break
 
-        if plugin_path == "":
+        if not plugin_path:
             _log.error("Could not find IPAM plugin of type %s in path %s.",
                        plugin_type, self.cni_path)
             sys.exit(1)
