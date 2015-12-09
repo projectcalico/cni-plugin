@@ -59,8 +59,7 @@ CNI_CMD_DELETE = "DEL"
 
 class CniPlugin(object):
     """
-    Class which encapsulates the function of a CNI 
-    plugin.
+    Class which encapsulates the function of a CNI plugin.
     """
     def __init__(self, network_config, env):
         self.network_config = network_config
@@ -126,19 +125,16 @@ class CniPlugin(object):
         """
 
         # TODO - What config do we need here and how do we get it?
-        #self.calico_config = calico_config
-
-        self.interface = "eth0"
+        # self.calico_config = calico_config
 
     def parse_cni_args(self, cni_args):
-        """
-        Parses the given CNI_ARGS string into key value pairs and 
-        returns a dictionary containing the arguments.
+        """Parses the given CNI_ARGS string into key value pairs
+        and returns a dictionary containing the arguments.
 
         e.g "FOO=BAR;ABC=123" -> {"FOO": "BAR", "ABC": "123"}
 
         :param cni_args
-        :return: None.
+        :return: args_to_return - dictionary of parsed cni args
         """
         # Dictionary to return.
         args_to_return = {}
@@ -216,7 +212,7 @@ class CniPlugin(object):
         self._set_profile_on_endpoint(endpoint, self.network_name)
 
         # Step 5: If all successful, print the IPAM plugin's output to stdout.
-        dump = json.dump(self.ipam_result)
+        dump = json.dumps(self.ipam_result)
         _log.info("Dumping info to container manager: %s", dump)
         print(dump)
 
@@ -239,6 +235,7 @@ class CniPlugin(object):
         self._release_ips()
 
         # Step 3: Delete the veth interface for this endpoint.
+        _log.info("Removing veth for endpoint %s", endpoint.name)
         netns.remove_veth(endpoint.name)
 
         # Step 4: Delete the Calico endpoint.
@@ -246,7 +243,7 @@ class CniPlugin(object):
 
         # Step 5: Delete any profiles for this endpoint
         # TODO: This is racey and needs further thinking.
-        self._remove_profile(self.network_name)
+        # self._remove_profile(self.network_name)
 
         _log.info('Finished deleting pod %s' % self.container_id)
 
@@ -254,7 +251,7 @@ class CniPlugin(object):
         """Assigns and returns an IPv4 address using the IPAM plugin
         specified in the network config file.
 
-        :return: The assigned IP address.
+        :return: IPAddress - The assigned IP address.
         """
         # TODO - Handle errors thrown by IPAM plugin
         self.ipam_result = self._call_ipam_plugin()
@@ -269,7 +266,7 @@ class CniPlugin(object):
 
         # The request was successful.  Get the IP.
         _log.info("IPAM result: %s", self.ipam_result)
-        return IPAddress(self.ipam_result["ipv4"]["ip"])
+        return IPAddress(self.ipam_result["ip4"]["ip"])
 
     def _release_ips(self, ip_list=[]):
         """Releases the IP address(es) for this container using the IPAM plugin
@@ -281,7 +278,7 @@ class CniPlugin(object):
         # TODO - add ips in ip_list to network_config attribute
         # (network_config['ipam']['ips']
         # TODO - Handle errors thrown by IPAM plugin
-        _log.debug("Releasing IP address")
+        _log.debug("Releasing IP address with IPAM plugin")
         try:
             result = self._call_ipam_plugin()
             _log.debug("IPAM plugin result: %s", result)
@@ -299,18 +296,9 @@ class CniPlugin(object):
 
         :return: Response from the IPAM plugin.
         """
-        # Get the plugin type and location.
-        plugin_type = self.network_config['ipam']['type']
-        _log.debug("IPAM plugin type: %s.  Plugin directory: %s", 
-                   plugin_type, self.cni_path)
-    
         # Find the correct plugin based on the given type.
-        plugin_path = os.path.abspath(os.path.join(self.cni_path, plugin_type))
+        plugin_path = self._find_ipam_plugin()
         _log.debug("Using IPAM plugin at: %s", plugin_path)
-    
-        if not os.path.isfile(plugin_path):
-            _log.error("Could not find IPAM plugin: %s", plugin_path)
-            sys.exit(1)
     
         # Execute the plugin and return the result.
         p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE)
@@ -320,9 +308,9 @@ class CniPlugin(object):
         return stdout
 
     def _create_endpoint(self, assigned_ip):
-        """Calls to the client to create an endpoint in the Calico datastore.
+        """Creates an endpoint in the Calico datastore with the client.
 
-        :param assigned_ip
+        :param assigned_ip - IPAddress that has been already allocated
         :return Calico endpoint object
         """
         try:
@@ -331,13 +319,13 @@ class CniPlugin(object):
                                                     self.container_id,
                                                     [assigned_ip])
         except AddrFormatError:
-            _log.error("Unable to create endpoint. Invalid IP address "
-                       "received from IPAM plugin: %s", assigned_ip)
+            _log.error("Unable to create endpoint. An invalid IP address was "
+                       "returned from IPAM plugin: %s", assigned_ip)
             # TODO - call release_ips / cleanup
             sys.exit(1)
         except KeyError:
             _log.error("Unable to create endpoint. BGP configuration not found."
-                       " Is calico-node running?")
+                       " Are the Calico services running?")
             # TODO - call release_ips / cleanup
             sys.exit(1)
 
@@ -351,6 +339,7 @@ class CniPlugin(object):
         :return: None
         """
         try:
+            _log.info("Removing endpoint from the Calico datastore.")
             self._client.remove_workload(hostname=HOSTNAME,
                                          orchestrator_id=ORCHESTRATOR_ID,
                                          workload_id=self.container_id)
@@ -363,13 +352,12 @@ class CniPlugin(object):
         """Provisions veth for given endpoint.
 
         Uses the netns relative path passed in through CNI_NETNS_ENV and
-        interface set in the __init__ function.
+        interface passed in through CNI_IFNAME_ENV.
 
         :param endpoint
         :return Calico endpoint object
         """
-        # TODO: Can we replace NETNS_ROOT with cwd?
-        netns_path = '%s/%s/%s' % (NETNS_ROOT, self.container_id, self.netns)
+        netns_path = os.path.abspath(os.path.join(os.getcwd(), self.netns))
         endpoint.mac = endpoint.provision_veth(Namespace(netns_path),
                                                self.interface)
         self._client.set_endpoint(endpoint)
@@ -412,7 +400,7 @@ class CniPlugin(object):
                 sys.exit(1)
 
     def _get_endpoint(self):
-        """Finds endpoint matching given endpoint_id.
+        """Gets endpoint matching the container_id.
 
         Exits gracefully if no endpoint is found.
         Exits with an error if multiple endpoints are found.
@@ -421,6 +409,8 @@ class CniPlugin(object):
         :return: Calico endpoint object
         """
         try:
+            _log.info("Retrieving endpoint that matches container ID %s",
+                      self.container_id)
             ep = self._client.get_endpoint(hostname=HOSTNAME,
                                            orchestrator_id=ORCHESTRATOR_ID,
                                            workload_id=self.container_id)
@@ -432,6 +422,24 @@ class CniPlugin(object):
             sys.exit(1)
 
         return ep
+
+    def _find_ipam_plugin(self):
+        plugin_type = self.network_config['ipam']['type']
+        plugin_path = ""
+        for path in self.cni_path.split(":"):
+            if os.path.isfile(os.path.abspath(os.path.join(path, plugin_type))):
+                plugin_path = path
+                break
+
+        if plugin_path == "":
+            _log.error("Could not find IPAM plugin of type %s in path %s.",
+                       plugin_type, self.cni_path)
+            sys.exit(1)
+
+        _log.debug("IPAM plugin type: %s.  Plugin directory: %s",
+                   plugin_type, plugin_path)
+        return os.path.abspath(os.path.join(plugin_path, plugin_type))
+
 
 
 def configure_logging(log_level=logging.DEBUG):
