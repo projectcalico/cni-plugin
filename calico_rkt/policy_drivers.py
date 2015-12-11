@@ -16,7 +16,7 @@ import logging
 from calico_rkt import configure_logging
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Rule, Rules
-from pycalico.utils import validate_characters
+from pycalico.util import validate_characters
 
 KUBERNETES_DEFAULT_PROFILE = "default_profile"
 
