@@ -107,6 +107,12 @@ class CniPlugin(object):
         to stdout at the end of execution.
         """
 
+        self.error_response = None
+        """
+        Stores an error response if an error is hit during plugin execution.
+        This is printed to stdout at the end of execution.
+        """
+
         self.policy_driver = self._get_policy_driver()
         """
         Chooses the correct policy driver based on the given configuration
@@ -150,13 +156,18 @@ class CniPlugin(object):
             # SystemExit indicates an error that was handled earlier
             # in the stack.  Just set the return code.
             _log.debug("Handling SystemExit, rc=%s", e.code)
-            rc = e.code 
+            rc = e.code
         except BaseException:
             # An unexpected Exception has bubbled up - catch it and
             # log it out.
-            _log.exception("Unhandled Exception killed plugin")
             rc = 1
+            self._set_error_response(rc, "Unhandled Exception killed plugin")
         finally:
+            # If we hit an error, print the error response to stdout
+            if self.error_response:
+                _log.error("Printing error response to stdout.")
+                print(self.error_response)
+                rc = self.error_response["code"]
             _log.debug("Execution complete, rc=%s", rc)
             return rc
 
@@ -249,6 +260,7 @@ class CniPlugin(object):
 
         :return: IPAddress - The assigned IP address.
         """
+        assert self.command == CNI_CMD_ADD
         # Call the IPAM plugin.  Returns the plugin returncode,
         # as well as the CNI result from stdout.
         _log.info("Assigning IP address")
@@ -263,6 +275,7 @@ class CniPlugin(object):
 
         try:
             # Load the response and get the assigned IP address.
+            _log.debug("IPAM plugin result: %s", self.ipam_result)
             self.ipam_result = json.loads(result)
         except ValueError:
             _log.exception("Invalid response from IPAM plugin, exiting")
@@ -270,7 +283,15 @@ class CniPlugin(object):
             sys.exit(1)
 
         try:
-            assigned_ip = IPNetwork(self.ipam_result["ip4"]["ip"])
+            error_code = self.ipam_result["code"]
+        except KeyError:
+            pass
+        else:
+            self.error_response = self.ipam_result
+            sys.exit(error_code)
+
+        try:
+            assigned_ip = IPAddress(self.ipam_result["ip4"]["ip"])
         except KeyError:
             _log.error("IPAM plugin did not return an IPv4 address")
             # TODO - Make sure IP address is cleaned up.
@@ -465,6 +486,21 @@ class CniPlugin(object):
                 plugin_path = temp_path
                 break
         return str(plugin_path)
+
+    def _set_error_response(self, code, message, details):
+        """Set the error_reponse class attribute with a json formatted reponse
+
+        :return: None
+        """
+        assert not self.error_response, "An error has already been hit " \
+                                        "during execution."
+        _log.error("Exiting with: %s", message)
+        error_response = json.dumps({
+            "cniVersion": "0.1.0", "code": code,
+            "message": message, "details": details
+        })
+        self.error_response = json.loads(error_response)
+        # Is there a reason to not call sys.exit here?
 
 
 def main():
