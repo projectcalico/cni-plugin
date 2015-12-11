@@ -13,15 +13,16 @@
 # limitations under the License.
 
 import logging
-from calico_rkt import configure_logging
+from util import configure_logging
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Rule, Rules
 from pycalico.util import validate_characters
 
 KUBERNETES_DEFAULT_PROFILE = "default_profile"
 
+LOG_FILENAME = "cni.log"
 _log = logging.getLogger(__name__)
-configure_logging(_log)
+configure_logging(_log, LOG_FILENAME)
 
 
 class BasePolicyDriver(object):

@@ -25,7 +25,7 @@ from pycalico import netns
 from pycalico.netns import Namespace, remove_veth
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_errors import MultipleEndpointsMatch
-
+from util import configure_logging
 from constants import *
 import policy_drivers
 
@@ -37,9 +37,7 @@ HOSTNAME = socket.gethostname()
 NETNS_ROOT = '/var/lib/rkt/pods/run'
 
 # Logging configuration.
-LOG_DIR = "/var/log/calico/cni"
 LOG_FILENAME = "cni.log"
-LOG_PATH = os.path.join(LOG_DIR, LOG_FILENAME)
 _log = logging.getLogger(__name__)
 
 
@@ -433,25 +431,6 @@ class CniPlugin(object):
         return str(plugin_path)
 
 
-def configure_logging(logger, log_level=logging.DEBUG):
-    """Configures logging for this file.
-
-    :return None.
-    """
-    # If the logging directory doesn't exist, create it.
-    if not os.path.exists(LOG_DIR):
-        os.makedirs(LOG_DIR)
-
-    # Create a log handler and formtter and apply to _log.
-    hdlr = logging.FileHandler(filename=LOG_PATH)
-    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
-    hdlr.setFormatter(formatter)
-    logger.addHandler(hdlr)
-
-    # Set the log level.
-    logger.setLevel(log_level)
-
-
 def main():
     """
     Main function - configures and runs the plugin.
@@ -461,7 +440,7 @@ def main():
     # do we need?
 
     # Configure logging.
-    configure_logging(_log)
+    configure_logging(_log, LOG_FILENAME)
 
     # Get the CNI environment. 
     env = os.environ.copy()

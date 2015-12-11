@@ -4,7 +4,7 @@ BUILD_FILES=Dockerfile requirements.txt
 
 default: all
 all: test
-binary: dist/calico_rkt
+binary: dist/calico dist/calico-ipam
 test: ut
 
 # Build a new docker image to be used by binary or tests
@@ -12,7 +12,7 @@ rktbuild.created: $(BUILD_FILES)
 	docker build -t calico/rkt-build .
 	touch rktbuild.created
 
-dist/calico_rkt: rktbuild.created
+dist/calico: rktbuild.created
 	mkdir -p dist
 	chmod 777 `pwd`/dist
 	
@@ -24,7 +24,19 @@ dist/calico_rkt: rktbuild.created
 	-e PYTHONPATH=/code/calico_rkt \
 	calico/rkt-build pyinstaller calico_rkt/calico_rkt.py -a -F -s --clean
 
-ut: dist/calico_rkt
+dist/calico-ipam: rktbuild.created
+	mkdir -p dist
+	chmod 777 `pwd`/dist
+
+	# Build the rkt plugin
+	docker run \
+	-u user \
+	-v `pwd`/calico_rkt:/code/calico_rkt \
+	-v `pwd`/dist:/code/dist \
+	-e PYTHONPATH=/code/calico_rkt \
+	calico/rkt-build pyinstaller calico_rkt/ipam.py -a -F -s --clean
+
+ut: dist/calico
 	docker run --rm -v `pwd`/calico_rkt:/code/calico_rkt \
 	-v `pwd`/nose.cfg:/code/nose.cfg \
 	calico/rkt-build bash -c \
