@@ -127,6 +127,11 @@ class CniPlugin(object):
         :param cni_args
         :return: args_to_return - dictionary of parsed cni args
         """
+        # Check if there are any args to parse.
+        if not cni_args:
+            _log.debug("No CNI_ARGS provided")
+            return {}
+
         # Dictionary to return.
         args_to_return = {}
 
