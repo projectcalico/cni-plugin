@@ -29,13 +29,6 @@ from util import configure_logging
 from constants import *
 import policy_drivers
 
-# Calico Configuration Constants
-ETCD_AUTHORITY_ENV = 'ETCD_AUTHORITY'
-
-ORCHESTRATOR_ID = "cni"
-HOSTNAME = socket.gethostname()
-NETNS_ROOT = '/var/lib/rkt/pods/run'
-
 # Logging configuration.
 LOG_FILENAME = "cni.log"
 _log = logging.getLogger(__name__)

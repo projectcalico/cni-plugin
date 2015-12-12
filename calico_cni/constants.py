@@ -18,9 +18,8 @@ import socket
 ETCD_AUTHORITY_ENV = 'ETCD_AUTHORITY'
 
 # System Specific Constants
-ORCHESTRATOR_ID = "rkt"
+ORCHESTRATOR_ID = "cni"
 HOSTNAME = socket.gethostname()
-NETNS_ROOT = '/var/lib/rkt/pods/run'
 
 # Constants for accessing environment variables. The following
 # set of variables are required by the CNI spec.

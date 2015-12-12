@@ -1,6 +1,6 @@
 .PHONY: all binary test ut clean
 
-SRCFILES=$(shell find calico_rkt)
+SRCFILES=$(shell find calico_cni)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
 
@@ -19,30 +19,30 @@ dist/calico: $(SRCFILES)
 	# Pull the build container.
 	docker pull calico/build:latest
 
-	# Build the rkt plugin
+	# Build the CNI plugin
 	docker run \
 	-u user \
 	-v `pwd`/dist:/code/dist \
-	-v `pwd`/calico_rkt:/code/calico_rkt \
-	calico/build pyinstaller calico_rkt/calico_rkt.py -a -F -s --clean
+	-v `pwd`/calico_cni:/code/calico_cni \
+	calico/build pyinstaller calico_cni/calico_cni.py -a -F -s -n calico --clean
 
 dist/calico-ipam: $(SRCFILES)
 	mkdir -p dist
 	chmod 777 `pwd`/dist
 
-	# Build the rkt plugin
+	# Build the CNI IPAM plugin
 	docker run \
 	-u user \
 	-v `pwd`/dist:/code/dist \
-	-v `pwd`/calico_rkt:/code/calico_rkt \
-	calico/build pyinstaller calico_rkt/ipam.py -a -F -s --clean
+	-v `pwd`/calico_cni:/code/calico_cni \
+	calico/build pyinstaller calico_cni/ipam.py -a -F -s -n calico-ipam --clean
 
 # Run the unit tests.
 ut: 
-	docker run --rm -v `pwd`/calico_rkt:/code/calico_rkt \
-	-v `pwd`/calico_rkt/nose.cfg:/code/nose.cfg \
+	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
+	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
 	calico/test \
-	nosetests calico_rkt/tests -c nose.cfg
+	nosetests calico_cni/tests -c nose.cfg
 
 
 clean:
