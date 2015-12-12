@@ -160,10 +160,10 @@ class CniPlugin(object):
         except BaseException:
             # An unexpected Exception has bubbled up - catch it and
             # log it out.
-            rc = 1
+            _log.exception("Unhandled Exception killed plugin")
             self._set_error_response(rc, "Unhandled Exception killed plugin")
         finally:
-            # If we hit an error, print the error response to stdout
+            # If we hit an error, print the error response to stdout.
             if self.error_response:
                 _log.error("Printing error response to stdout.")
                 print(self.error_response)
@@ -278,27 +278,33 @@ class CniPlugin(object):
             _log.debug("IPAM plugin result: %s", self.ipam_result)
             self.ipam_result = json.loads(result)
         except ValueError:
-            _log.exception("Invalid response from IPAM plugin, exiting")
-            # TODO - Make sure IP address is cleaned up.
+            message = "Failed to parse IPAM response, exiting"
+            _log.exception(message)
+            self._set_error_response(1, message)
             sys.exit(1)
 
         try:
+            # Check to see if the response returned from the IPAM plugin
+            # is an error response.
             error_code = self.ipam_result["code"]
         except KeyError:
-            pass
+            # IPAM plugin did not hit any errors.
+            _log.debug("IPAM plugin did not return any errors.")
         else:
+            # IPAM plugin hit an error. Set to error_response and exit.
+            _log.debug("IPAM plugin returned an error.")
             self.error_response = self.ipam_result
             sys.exit(error_code)
 
         try:
             assigned_ip = IPAddress(self.ipam_result["ip4"]["ip"])
         except KeyError:
-            _log.error("IPAM plugin did not return an IPv4 address")
-            # TODO - Make sure IP address is cleaned up.
+            message =  "IPAM plugin did not return an IPv4 address."
+            self._set_error_response(1, message)
             sys.exit(1)
         except (AddrFormatError, ValueError):
-            # TODO - Make sure IP address is cleaned up.
-            _log.error("Invalid IP address %s", self.ipam_result["ip4"]["ip"])
+            message = "Invalid IP address %s" % self.ipam_result["ip4"]["ip"]
+            self._set_error_response(1, message)
             sys.exit(1)
 
         _log.info("IPAM plugin assigned IP address: %s", assigned_ip)
@@ -330,8 +336,9 @@ class CniPlugin(object):
         # Find the correct plugin based on the given type.
         plugin_path = self._find_ipam_plugin()
         if not plugin_path:
-            _log.error("Could not find IPAM plugin of type '%s' in path '%s'",
-                       self.network_config['ipam']['type'], self.cni_path)
+            message = "Could not find IPAM plugin of type %s in path %s." % \
+                      (self.network_config['ipam']['type'], self.cni_path)
+            self._set_error_response(1, message)
             sys.exit(1)
     
         # Execute the plugin and return the result.
@@ -356,12 +363,14 @@ class CniPlugin(object):
                                                     self.container_id,
                                                     [assigned_ip])
         except AddrFormatError:
-            _log.error("This node is not configured for IPv%s", assigned_ip.version)
+            message = "This node is not configured for IPv%s" % assigned_ip.version
+            self._set_error_response(1, message)
             # TODO - call release_ip / cleanup
             sys.exit(1)
         except KeyError:
-            _log.error("Unable to create endpoint. BGP configuration not found"
-                       " Are the Calico services running?")
+            message = "Unable to create endpoint. BGP configuration not found." \
+                      " Are the Calico services running?")
+            self._set_error_response(1, message)
             # TODO - call release_ip / cleanup
             sys.exit(1)
 
@@ -429,9 +438,10 @@ class CniPlugin(object):
             try:
                 driver = policy_drivers.DefaultPolicyDriver(self.network_name)
             except ValueError:
-                _log.error("Invalid characters detected in the network name "
-                           "'%s'. Only letters a-z, numbers 0-9, and _.- "
-                           " are supported", self.network_name)
+                message = "Invalid characters detected in the network name, " \
+                          "%s. Only letters a-z, numbers 0-9, and symbols _.-" \
+                           " are supported." % self.network_name
+                self._set_error_response(1, message)
                 sys.exit(1)
         else:
             _log.debug("Using Default Kubernetes Policy Driver")
@@ -460,7 +470,8 @@ class CniPlugin(object):
             _log.warning("No endpoint found matching ID %s", self.container_id)
             endpoint = None
         except MultipleEndpointsMatch:
-            _log.error("Multiple endpoints found matching ID %s", self.container_id)
+            message = "Multiple endpoints found matching ID %s" % self.container_id
+            self._set_error_response(1, message)
             sys.exit(1)
 
         return endpoint
@@ -487,7 +498,7 @@ class CniPlugin(object):
                 break
         return str(plugin_path)
 
-    def _set_error_response(self, code, message, details):
+    def _set_error_response(self, code, message, details=None):
         """Set the error_reponse class attribute with a json formatted reponse
 
         :return: None
@@ -495,12 +506,11 @@ class CniPlugin(object):
         assert not self.error_response, "An error has already been hit " \
                                         "during execution."
         _log.error("Exiting with: %s", message)
-        error_response = json.dumps({
+        error_response = {
             "cniVersion": "0.1.0", "code": code,
             "message": message, "details": details
-        })
+        }
         self.error_response = json.loads(error_response)
-        # Is there a reason to not call sys.exit here?
 
 
 def main():
