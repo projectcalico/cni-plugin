@@ -34,3 +34,11 @@ CNI_PATH_ENV = "CNI_PATH"
 # CNI Constants
 CNI_CMD_ADD = "ADD"
 CNI_CMD_DELETE = "DEL"
+
+# CNI Error Codes
+ERR_CODE_UNHANDLED = 100
+ERR_CODE_FAILED_ASSIGNMENT = 101
+ERR_CODE_INVALID_ARGUMENT = 102
+
+# Logging Configuration
+LOG_DIR = "/var/log/calico/cni"
