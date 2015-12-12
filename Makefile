@@ -1,4 +1,4 @@
-.PHONY: all binary test ut clean
+.PHONY: all binary test plugin ipam ut clean
 
 SRCFILES=$(shell find calico_cni)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
@@ -8,6 +8,8 @@ default: all
 all: binary test
 binary: dist/calico dist/calico-ipam
 test: ut
+plugin: dist/calico
+ipam: dist/calico-ipam
 
 
 # Builds the Calico CNI plugin binary.
@@ -52,7 +54,7 @@ clean:
 	-docker run -v /var/run/docker.sock:/var/run/docker.sock -v /var/lib/docker:/var/lib/docker --rm martin/docker-cleanup-volumes
 
 
-## Run etcd in a container. Used by the STs and generally useful.
+## Run etcd in a container. Generally useful.
 run-etcd:
 	@-docker rm -f calico-etcd
 	docker run --detach \
