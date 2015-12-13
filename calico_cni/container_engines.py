@@ -46,6 +46,9 @@ class DefaultEngine(BaseContainerEngine):
     Implements default container engine for a generic CNI plugin.
     """
     def uses_host_networking(self, container_id): 
+        """
+        Rkt does not call CNI plugins when --net=host is set.
+        """
         return False
 
 class DockerEngine(BaseContainerEngine):
