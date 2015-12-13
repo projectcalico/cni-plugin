@@ -17,8 +17,11 @@ import json
 import os
 import sys
 
+from netaddr import IPNetwork
+
 from pycalico.ipam import IPAMClient
 from util import configure_logging
+from constants import *
 
 LOG_FILENAME = "ipam.log"
 
@@ -52,9 +55,9 @@ class IpamPlugin(object):
         # using the given config and environment.
         self._parse_config()
 
-    def calico_ipam(self):
+    def execute(self):
         """
-        Assigns or un-assigns IP addresses for the specified container.
+        Assigns or releases IP addresses for the specified container.
         :return:
         """
         if self.command == "ADD":
@@ -63,67 +66,78 @@ class IpamPlugin(object):
             ipv4, ipv6 = self._assign_address(handle_id=self.container_id)
     
             # Output the response and exit successfully.
-            print json.dumps({"ip4": {"ip": str(ipv4),},"ip6": {"ip": str(ipv6),},})
+            print json.dumps({"ip4": {"ip": str(ipv4.cidr),},
+                              "ip6": {"ip": str(ipv6.cidr),},})
         else:
-            # Un-assign any IP addresses for this container.
-            assert self.command == "DEL", "Invalid command: %s" % self.command
+            # Release any IP addresses for this container.
+            assert self.command == CNI_CMD_DELETE, \
+                    "Invalid command: %s" % self.command
     
             # Release IPs using the container_id as the handle.
-            _log.info("Un-assigning address on container %s", self.container_id)
+            _log.info("Releasing address on container %s", 
+                    self.container_id)
             try:
                 datastore_client.release_ip_by_handle(handle_id=self.container_id)
             except KeyError:
-                _log.warning("No IPs assigned to container_id %s", self.container_id)
+                _log.warning("No IPs assigned to container_id %s", 
+                        self.container_id)
 
     def _assign_address(self, handle_id, ipv4_pool=None, ipv6_pool=None):
         """
-        Assigns an IPv4 and IPv6 address within the given pools.  If no pools are given,
-        they will be automatically chosen.
+        Assigns an IPv4 and IPv6 address within the given pools.  
+        If no pools are given, they will be automatically chosen.
     
         :return: A tuple of (IPv4, IPv6) address assigned.
         """
-        ipv4 = None
-        ipv6 = None
+        ipv4 = IPNetwork("0.0.0.0") 
+        ipv6 = IPNetwork("::") 
         try:
             ipv4_addrs, ipv6_addrs = datastore_client.auto_assign_ips(num_v4=1,
                                                                       num_v6=0,
                                                                       handle_id=handle_id,
                                                                       attributes=None,
                                                                       pool=(ipv4_pool, ipv6_pool))
-            ipv4 = ipv4_addrs[0]
+            _log.debug("Allocated ip4s: %s, ip6s: %s", ipv4_addrs, ipv6_addrs)
         except RuntimeError as err:
             _log.error("Cannot auto assign IPAddress: %s", err.message)
             _exit_on_error(code=ERR_CODE_FAILED_ASSIGNMENT,
                            message="Failed to assign IP address",
                            details=err.message)
         else:
+            try:
+                ipv4 = ipv4_addrs[0]
+            except IndexError:
+                _log.error("No IPv4 address returned, exiting")
+                _exit_on_error(code=ERR_CODE_FAILED_ASSIGNMENT,
+                               message="No IPv4 addresses returned",
+                               details = "")
             _log.info("Assigned IPv4: %s, IPv6: %s", ipv4, ipv6)
-            return ipv4, ipv6
+            return IPNetwork(ipv4), IPNetwork(ipv6)
 
     def _parse_config(self):
         """
-        Validates that the plugins environment and given config contain the required
-        values.
+        Validates that the plugins environment and given config contain 
+        the required values.
         """
-        _log.debug('Environment: %s', self.env)
-        _log.debug('Config: %s', self.config)
+        _log.debug('Environment: %s', json.dumps(self.env, indent=2))
+        _log.debug('Network config: %s', json.dumps(self.config, indent=2))
     
         # Check the given environment contains the required fields.
         try:
-            self.command = env['CNI_COMMAND']
+            self.command = env[CNI_COMMAND_ENV]
         except KeyError:
             _exit_on_error(code=ERR_CODE_INVALID_ARGUMENT,
                            message="Arguments Invalid",
                            details="CNI_COMMAND not found in environment")
         else:
             # If the command is present, make sure it is valid.
-            if self.command not in ["ADD", "DEL"]:
+            if self.command not in [CNI_CMD_ADD, CNI_CMD_DELETE]:
                 _exit_on_error(code=ERR_CODE_INVALID_ARGUMENT,
                                message="Arguments Invalid",
                                details="Invalid command '%s'" % self.command)
 
         try:
-            self.container_id = env['CNI_CONTAINERID']
+            self.container_id = env[CNI_CONTAINERID_ENV]
         except KeyError:
             _exit_on_error(code=ERR_CODE_INVALID_ARGUMENT,
                            message="Arguments Invalid",
@@ -160,7 +174,7 @@ if __name__ == '__main__':
 
     try:
         # Execute IPAM.
-        plugin.calico_ipam()
+        plugin.execute()
     except Exception, e:
         _log.exception("Unhandled exception")
         _exit_on_error(ERR_CODE_UNHANDLED,

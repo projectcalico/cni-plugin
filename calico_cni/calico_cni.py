@@ -379,8 +379,7 @@ class CniPlugin(object):
         endpoint.mac = endpoint.provision_veth(Namespace(netns_path),
                                                self.interface)
         self._client.set_endpoint(endpoint)
-        _log.info("Provisioned veth for endpoint using netns path %s on "
-                  "interface %s", netns_path, self.interface)
+        _log.info("Provisioned %s in netns %s", self.interface, netns_path)
         return endpoint
 
     def _get_container_engine(self):
@@ -392,7 +391,7 @@ class CniPlugin(object):
             _log.debug("Using Kubernetes + Docker container engine")
             return DockerEngine()
         else:
-            _log.debug("Using default container engine.")
+            _log.debug("Using default container engine")
             return DefaultEngine()
 
 
@@ -404,7 +403,7 @@ class CniPlugin(object):
         try:
             self.cni_args["K8S_POD_NAME"]
         except KeyError:
-            _log.debug("Using Default Policy Driver")
+            _log.debug("Using default dolicy driver")
             try:
                 driver = policy_drivers.DefaultPolicyDriver(self.network_name)
             except ValueError:
