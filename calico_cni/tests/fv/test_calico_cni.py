@@ -27,7 +27,7 @@ import pycalico.netns
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import IPPool, Endpoint
 
-import calico_cni 
+import calico_cni, container_engines
 from calico_cni import CniPlugin
 from policy_drivers import DefaultPolicyDriver, KubernetesDefaultPolicyDriver 
 from container_engines import DockerEngine
@@ -72,11 +72,16 @@ class CniPluginFvTest(unittest.TestCase):
         self.m_netns = MagicMock(spec=self.netns)
         calico_cni.netns = self.m_netns
 
+        self.docker_client = container_engines.Client
+        self.m_docker_client = MagicMock(self.docker_client)
+        container_engines.Client = self.m_docker_client
+
     def tearDown(self):
         # Reset module mocks.
         calico_cni.Popen = self.m_popen
         calico_cni.os = self.os
         calico_cni.netns = self.m_netns
+        container_engines.Client = self.docker_client
 
     def create_plugin(self):
         self.network_config = {
@@ -165,10 +170,13 @@ class CniPluginFvTest(unittest.TestCase):
                                   "ip6": {"ip": ip6}})
         self.set_ipam_result(0, ipam_stdout, "")
 
+        # Set up docker client response.
+        inspect_result = {"HostConfig": {"NetworkMode": ""}}
+        self.m_docker_client().inspect_container.return_value = inspect_result
+
         # Create plugin.
         p = self.create_plugin()
         assert_true(isinstance(p.container_engine, DockerEngine))
-        p.container_engine._client = MagicMock(spec=p.container_engine._client)
 
         # Execute.
         rc = p.execute()
@@ -204,13 +212,10 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Create plugin.
         p = self.create_plugin()
-        assert_true(isinstance(p.container_engine, DockerEngine))
-        m_docker_client = MagicMock(spec=p.container_engine._client)
-        p.container_engine._client = m_docker_client
 
         # Mock NetworkMode == host.
         inspect_result = {"HostConfig": {"NetworkMode": "host"}}
-        m_docker_client.inspect_container.return_value = inspect_result
+        self.m_docker_client().inspect_container.return_value = inspect_result
 
         # Execute.
         rc = p.execute()
