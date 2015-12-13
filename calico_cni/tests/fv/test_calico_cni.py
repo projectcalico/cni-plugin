@@ -29,7 +29,8 @@ from pycalico.datastore_datatypes import IPPool, Endpoint
 
 import calico_cni 
 from calico_cni import CniPlugin
-from policy_drivers import DefaultPolicyDriver 
+from policy_drivers import DefaultPolicyDriver, KubernetesDefaultPolicyDriver 
+from container_engines import DockerEngine
 
 
 class CniPluginFvTest(unittest.TestCase):
@@ -37,7 +38,9 @@ class CniPluginFvTest(unittest.TestCase):
     Performs FV testing on an instance of CniPlugin.
 
     Mocked out interfaces:
-    - subprocess32.Popen
+    - Popen
+    - netns
+    - pycalico.DatastoreClient
     """
     def setUp(self):
         self.command = None
@@ -56,22 +59,24 @@ class CniPluginFvTest(unittest.TestCase):
         # Mock out the datastore client.
         self.client = MagicMock(spec=DatastoreClient)
 
-        # Mock out the policy driver.
-        self.policy_driver = MagicMock(spec=DefaultPolicyDriver)
-
         # Setup module mocks.
         self.popen = calico_cni.Popen
         self.m_popen = MagicMock(spec=self.popen)
         calico_cni.Popen = self.m_popen
 
         self.os = calico_cni.os
-        self.m_os = MagicMock(self.os)
+        self.m_os = MagicMock(spec=self.os)
         calico_cni.os = self.m_os
+
+        self.netns = calico_cni.netns
+        self.m_netns = MagicMock(spec=self.netns)
+        calico_cni.netns = self.m_netns
 
     def tearDown(self):
         # Reset module mocks.
         calico_cni.Popen = self.m_popen
         calico_cni.os = self.os
+        calico_cni.netns = self.m_netns
 
     def create_plugin(self):
         self.network_config = {
@@ -87,10 +92,10 @@ class CniPluginFvTest(unittest.TestCase):
         }
 
         self.env = {
+                CNI_COMMAND_ENV: self.command, 
                 CNI_CONTAINERID_ENV: self.container_id,
                 CNI_IFNAME_ENV: self.cni_ifname,
                 CNI_ARGS_ENV: self.cni_args,
-                CNI_COMMAND_ENV: CNI_CMD_ADD, 
                 CNI_PATH_ENV: self.cni_path, 
                 CNI_NETNS_ENV: self.cni_netns
         }
@@ -98,30 +103,32 @@ class CniPluginFvTest(unittest.TestCase):
         # Create the CniPlugin to test.
         plugin = CniPlugin(self.network_config, self.env)
 
-        # Mock out policy driver. 
-        plugin.policy_driver = self.policy_driver 
-
         # Mock out the datastore client.
         plugin._client = self.client
+        plugin.policy_driver._client = self.client
 
         return plugin
 
-    def set_ipam_result(self, stdout, stderr):
+    def set_ipam_result(self, rc, stdout, stderr):
         """
         Set the output of the mock IPAM plugin before execution.
         """
         self.m_popen().communicate.return_value = stdout, stderr
+        self.m_popen().returncode = rc
 
     def test_add_mainline(self):
         """
         Tests basic CNI add functionality.
+
+        Uses DefaultPolicyDriver.
         """
         # Configure.
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
+        ip6 = ""
         ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
-                                  "ip6": {"ip": ""}})
-        self.set_ipam_result(ipam_stdout, "")
+                                  "ip6": {"ip": ip6}})
+        self.set_ipam_result(0, ipam_stdout, "")
 
         # Create plugin.
         p = self.create_plugin()
@@ -132,29 +139,193 @@ class CniPluginFvTest(unittest.TestCase):
         # Assert success.
         assert_equal(rc, 0)
 
+        # Assert the correct policy driver was chosen.
+        assert_true(isinstance(p.policy_driver, DefaultPolicyDriver)) 
+
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
                 "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert a profile was applied.
-        self.policy_driver.set_profile.assert_called_once_with(self.client.create_endpoint())
+        self.client.set_profiles_on_endpoint.assert_called_once_with(
+                profile_names=[self.network_name],
+                endpoint_id=self.client.create_endpoint().endpoint_id
+        )
+
+    def test_add_mainline_kubernetes_docker(self):
+        """
+        Tests basic CNI add functionality using k8s and Docker.
+        """
+        # Configure.
+        self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=default"
+        self.command = CNI_CMD_ADD
+        ip4 = "10.0.0.1/32"
+        ip6 = ""
+        ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
+                                  "ip6": {"ip": ip6}})
+        self.set_ipam_result(0, ipam_stdout, "")
+
+        # Create plugin.
+        p = self.create_plugin()
+        assert_true(isinstance(p.container_engine, DockerEngine))
+        p.container_engine._client = MagicMock(spec=p.container_engine._client)
+
+        # Execute.
+        rc = p.execute()
+        
+        # Assert success.
+        assert_equal(rc, 0)
+
+        # Assert the correct policy driver was chosen.
+        assert_true(isinstance(p.policy_driver, KubernetesDefaultPolicyDriver)) 
+
+        # Assert an endpoint was created.
+        self.client.create_endpoint.assert_called_once_with(ANY, 
+                "cni", self.container_id, [IPNetwork(ip4)])
+
+        # Assert a profile was applied.
+        self.client.set_profiles_on_endpoint.assert_called_once_with(
+                profile_names=["default_profile"],
+                endpoint_id=self.client.create_endpoint().endpoint_id
+        )
+
+    def test_add_kubernetes_docker_host_networking(self):
+        """
+        Test CNI add in k8s docker when NetworkMode == host.
+        """
+        # Configure.
+        self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=default"
+        self.command = CNI_CMD_ADD
+        ip4 = "10.0.0.1/32"
+        ip6 = ""
+        ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
+                                  "ip6": {"ip": ip6}})
+        self.set_ipam_result(0, ipam_stdout, "")
+
+        # Create plugin.
+        p = self.create_plugin()
+        assert_true(isinstance(p.container_engine, DockerEngine))
+        m_docker_client = MagicMock(spec=p.container_engine._client)
+        p.container_engine._client = m_docker_client
+
+        # Mock NetworkMode == host.
+        inspect_result = {"HostConfig": {"NetworkMode": "host"}}
+        m_docker_client.inspect_container.return_value = inspect_result
+
+        # Execute.
+        rc = p.execute()
+        
+        # Assert success.
+        assert_equal(rc, 0)
+
+        # Assert an endpoint was not created.
+        assert_false(self.client.create_endpoint.called)
+
+    def test_add_ipam_error(self):
+        """
+        Tests CNI add, IPAM plugin fails. 
+
+        The plugin should return an error code and print the IPAM result,
+        but should not need to clean anything up since IPAM is the first
+        step in CNI add.
+        """
+        # Configure.
+        self.command = CNI_CMD_ADD
+        ipam_stdout = json.dumps({"code": 1, "message": "msg", "details": ""})
+        self.set_ipam_result(1, ipam_stdout, "")
+
+        # Create plugin.
+        p = self.create_plugin()
+
+        # Execute.
+        rc = p.execute()
+        
+        # Assert failure.
+        assert_equal(rc, 1)
+
+        # Assert an endpoint was not created.
+        assert_false(self.client.create_endpoint.called) 
+
+        # Assert a profile was not set.
+        assert_false(self.client.set_profiles_on_endpoint.called)
+
+    def test_add_ipam_error_missing_ip(self):
+        """
+        Tests CNI add, IPAM does not contain IPv4 address. 
+        """
+        # Configure.
+        self.command = CNI_CMD_ADD
+        ipam_stdout = json.dumps({"ip4": {"ip": ""}, 
+                                  "ip6": {"ip": ""}})
+
+        # Set the return code to 0, even though IPAM failed.  This shouldn't
+        # ever happen, but at least we know we're ready for it.  We have other
+        # test cases that handle rc != 0.
+        self.set_ipam_result(0, ipam_stdout, "")
+
+        # Create plugin.
+        p = self.create_plugin()
+
+        # Execute.
+        rc = p.execute()
+        
+        # Assert failure.
+        assert_equal(rc, 1)
+
+        # Assert an endpoint was not created.
+        assert_false(self.client.create_endpoint.called) 
+
+        # Assert a profile was not set.
+        assert_false(self.client.set_profiles_on_endpoint.called)
+
+    def test_add_ipam_error_invalid_response(self):
+        """
+        Tests CNI add, IPAM response is not valid json. 
+        """
+        # Configure.
+        self.command = CNI_CMD_ADD
+        ipam_stdout = "{some invalid json}" 
+
+        # Set the return code to 0, even though IPAM failed.  This shouldn't
+        # ever happen, but at least we know we're ready for it.  We have other
+        # test cases that handle rc != 0.
+        self.set_ipam_result(0, ipam_stdout, "")
+
+        # Create plugin.
+        p = self.create_plugin()
+
+        # Execute.
+        rc = p.execute()
+        
+        # Assert failure.
+        assert_equal(rc, 1)
+
+        # Assert an endpoint was not created.
+        assert_false(self.client.create_endpoint.called) 
+
+        # Assert a profile was not set.
+        assert_false(self.client.set_profiles_on_endpoint.called)
+
+
 
     def test_add_error_profile_create(self):
         """
         Tests CNI add, plugin fails to create profile.
+
+        Uses DefaultPolicyDriver.
         """
         # Configure.
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
         ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
                                   "ip6": {"ip": ""}})
-        self.set_ipam_result(ipam_stdout, "")
+        self.set_ipam_result(0, ipam_stdout, "")
 
         # Create plugin.
         p = self.create_plugin()
 
         # Configure EtcdException when setting profile.
-        p.policy_driver.set_profile = MagicMock(side_effect=EtcdException)
+        p.policy_driver._client.set_profiles_on_endpoint.side_effect = MagicMock(side_effect=EtcdException)
 
         # Execute.
         rc = p.execute()
@@ -166,8 +337,53 @@ class CniPluginFvTest(unittest.TestCase):
         self.client.create_endpoint.assert_called_once_with(ANY, 
                 "cni", self.container_id, [IPNetwork(ip4)])
 
-        # Assert set_profile called.
-        self.policy_driver.set_profile.assert_called_once_with(self.client.create_endpoint())
+        # Assert set_profile called by policy driver.
+        self.client.set_profiles_on_endpoint.assert_called_once_with(
+                profile_names=[self.network_name],
+                endpoint_id=self.client.create_endpoint().endpoint_id
+        )
 
         # Assert the endpoint was removed from the datastore.
-        self.client.remove_endpoint.assert_called_once_with(ANY, "cni", self.container_id)
+        # TODO - Reinstate?
+        #self.client.remove_endpoint.assert_called_once_with(ANY, "cni", self.container_id)
+
+    def test_delete_mainline(self):
+        """
+        Tests CNI delete, success.
+        """
+        # Configure.
+        self.command = CNI_CMD_DELETE
+
+        # Don't expect output from IPAM plugin when performing a delete.
+        self.set_ipam_result(0, "", "")
+
+        # Create plugin.
+        p = self.create_plugin()
+
+        # Execute.
+        rc = p.execute()
+
+        # Assert.
+        assert_equal(rc, 0)
+
+    def test_delete_no_endpoint(self):
+        """
+        Tests CNI delete with no endpoint. 
+        """
+        # Configure.
+        self.command = CNI_CMD_DELETE
+
+        # Don't expect output from IPAM plugin when performing a delete.
+        self.set_ipam_result(0, "", "")
+
+        # Mock datastore to return no endpoint.
+        self.client.get_endpoint.side_effect = KeyError
+
+        # Create plugin.
+        p = self.create_plugin()
+
+        # Execute.
+        rc = p.execute()
+
+        # Assert.
+        assert_equal(rc, 0)

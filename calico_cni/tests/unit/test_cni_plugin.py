@@ -200,9 +200,10 @@ class CniPluginTest(unittest.TestCase):
     def test_assign_ip_mainline(self):
         # Mock _call_ipam_plugin.
         ip4 = "10.0.0.1/32"
+        rc = 0
         ipam_result = json.dumps({"ip4": {"ip": ip4}, "ip6": {"ip": ""}})
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
-        self.plugin._call_ipam_plugin.return_value = ipam_result
+        self.plugin._call_ipam_plugin.return_value = rc, ipam_result
 
         # Call _assign_ip.
         assigned_ip = self.plugin._assign_ip()
@@ -212,8 +213,9 @@ class CniPluginTest(unittest.TestCase):
 
     def test_release_ip_mainline(self):
         # Mock _call_ipam_plugin.
+        rc = 0
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
-        self.plugin._call_ipam_plugin.return_value = "" 
+        self.plugin._call_ipam_plugin.return_value = rc, "" 
 
         # Call _release_ip.
         self.plugin._release_ip()
@@ -230,12 +232,14 @@ class CniPluginTest(unittest.TestCase):
         stderr = ""
         m_proc = MagicMock(spec=Popen)
         m_proc.communicate.return_value = (stdout, stderr)
+        m_proc.returncode = 0
         m_popen.return_value = m_proc
 
         # Call _call_ipam_plugin.
-        result = self.plugin._call_ipam_plugin()
+        rc, result = self.plugin._call_ipam_plugin()
 
         # Assert.
+        assert_equal(rc, 0)
         m_popen.assert_called_once_with(plugin_path, 
                                         stdin=PIPE, 
                                         stdout=PIPE, 
