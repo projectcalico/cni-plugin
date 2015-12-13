@@ -19,7 +19,7 @@ import os
 import sys
 
 from subprocess32 import CalledProcessError,  Popen, PIPE
-from netaddr import IPAddress, AddrFormatError
+from netaddr import IPNetwork, AddrFormatError
 
 from pycalico import netns
 from pycalico.netns import Namespace, remove_veth
@@ -132,6 +132,7 @@ class CniPlugin(object):
             _log.debug("\tParsing CNI_ARG: %s", arg)
             k, v = arg.split("=")
             args_to_return[k] = v
+        _log.debug("Parsed CNI_ARGS: %s", args_to_return)
         return args_to_return
 
     def execute(self):
@@ -180,7 +181,7 @@ class CniPlugin(object):
 
         :return: None.
         """
-        _log.info('Configuring pod %s' % self.container_id)
+        _log.info('Configuring networking for container: %s' % self.container_id)
 
         # Step 1: Assign an IP address using the given IPAM plugin.
         assigned_ip = self._assign_ip()
@@ -199,16 +200,16 @@ class CniPlugin(object):
         _log.info("Printing CNI result to stdout: %s", dump)
         print(dump)
 
-        _log.info("Finished creating pod %s", self.container_id)
+        _log.info("Finished networking container: %s", self.container_id)
     
     def delete(self):
         """Handles CNI_CMD_DELETE requests.
 
-        Remove this pod from Calico networking.
+        Remove this container from Calico networking.
 
         :return: None.
         """
-        _log.info('Deleting pod %s' % self.container_id)
+        _log.info('Remove networking from container: %s' % self.container_id)
 
         # Step 1: Remove any IP assignments.
         self._release_ip()
@@ -231,7 +232,7 @@ class CniPlugin(object):
         # Step 5: Delete any profiles for this endpoint
         self.policy_driver.remove_profile()
 
-        _log.info('Finished deleting pod %s' % self.container_id)
+        _log.info('Finished removing container: %s' % self.container_id)
 
     def _assign_ip(self):
         """Assigns and returns an IPv4 address using the IPAM plugin
@@ -240,22 +241,25 @@ class CniPlugin(object):
         :return: IPAddress - The assigned IP address.
         """
         # TODO - Handle errors thrown by IPAM plugin
-        self.ipam_result = self._call_ipam_plugin()
-        _log.debug("IPAM plugin result: %s", self.ipam_result)
+        result = self._call_ipam_plugin()
+        _log.debug("IPAM plugin raw result: %s", result)
 
         try:
             # Load the response and get the assigned IP address.
-            self.ipam_result = json.loads(self.ipam_result)
+            self.ipam_result = json.loads(result)
         except ValueError:
             _log.exception("Failed to parse IPAM response, exiting")
+            # TODO - Make sure IP address is cleaned up.
             sys.exit(1)
 
         try:
-            assigned_ip = IPAddress(self.ipam_result["ip4"]["ip"])
+            assigned_ip = IPNetwork(self.ipam_result["ip4"]["ip"])
         except KeyError:
             _log.error("IPAM plugin did not return an IPv4 address.")
+            # TODO - Make sure IP address is cleaned up.
             sys.exit(1)
         except (AddrFormatError, ValueError):
+            # TODO - Make sure IP address is cleaned up.
             _log.error("Invalid IP address %s", self.ipam_result["ip4"]["ip"])
             sys.exit(1)
 
@@ -289,7 +293,7 @@ class CniPlugin(object):
         # Find the correct plugin based on the given type.
         plugin_path = self._find_ipam_plugin()
         if not plugin_path:
-            _log.error("Could not find IPAM plugin of type %s in path %s.",
+            _log.error("Could not find IPAM plugin of type '%s' in path '%s'.",
                        self.network_config['ipam']['type'], self.cni_path)
             sys.exit(1)
     
@@ -297,7 +301,7 @@ class CniPlugin(object):
         _log.debug("Using IPAM plugin at: %s", plugin_path)
         p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = p.communicate(json.dumps(self.network_config))
-        _log.debug("IPAM plugin output: \nstdout: %s\nstderr: %s", 
+        _log.debug("IPAM plugin output: \nstdout:\n%s\n\nstderr:\n%s\n", 
                    stdout, stderr)
         return stdout
 
@@ -369,8 +373,8 @@ class CniPlugin(object):
             try:
                 driver = policy_drivers.DefaultPolicyDriver(self.network_name)
             except ValueError:
-                _log.error("Invalid characters detected in the network name,"
-                           " %s. Only letters a-z, numbers 0-9, and symbols _.-"
+                _log.error("Invalid characters detected in the network name "
+                           "'%s'. Only letters a-z, numbers 0-9, and _.- "
                            " are supported.", self.network_name)
                 sys.exit(1)
         else:
