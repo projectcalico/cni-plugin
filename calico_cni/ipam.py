@@ -91,12 +91,12 @@ class IpamPlugin(object):
         """
         ipv4 = IPNetwork("0.0.0.0") 
         ipv6 = IPNetwork("::") 
+        pool = (ipv4_pool, ipv6_pool)
         try:
-            ipv4_addrs, ipv6_addrs = datastore_client.auto_assign_ips(num_v4=1,
-                                                                      num_v6=0,
-                                                                      handle_id=handle_id,
-                                                                      attributes=None,
-                                                                      pool=(ipv4_pool, ipv6_pool))
+            ipv4_addrs, ipv6_addrs = datastore_client.auto_assign_ips(
+                    num_v4=1, num_v6=1, handle_id=handle_id, 
+                    attributes=None, pool=pool
+            )
             _log.debug("Allocated ip4s: %s, ip6s: %s", ipv4_addrs, ipv6_addrs)
         except RuntimeError as err:
             _log.error("Cannot auto assign IPAddress: %s", err.message)
@@ -111,6 +111,14 @@ class IpamPlugin(object):
                 _exit_on_error(code=ERR_CODE_FAILED_ASSIGNMENT,
                                message="No IPv4 addresses returned",
                                details = "")
+            try:
+                ipv6 = ipv6_addrs[0]
+            except IndexError:
+                _log.error("No IPv6 address returned, exiting")
+                _exit_on_error(code=ERR_CODE_FAILED_ASSIGNMENT,
+                               message="No IPv6 addresses returned",
+                               details = "")
+
             _log.info("Assigned IPv4: %s, IPv6: %s", ipv4, ipv6)
             return IPNetwork(ipv4), IPNetwork(ipv6)
 
