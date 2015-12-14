@@ -16,6 +16,7 @@ from __future__ import print_function
 import logging
 import json
 import os
+import re
 import sys
 
 from subprocess32 import CalledProcessError,  Popen, PIPE
@@ -34,6 +35,9 @@ from container_engines import DefaultEngine, DockerEngine
 # Logging configuration.
 LOG_FILENAME = "cni.log"
 _log = logging.getLogger(__name__)
+
+# Regex to parse CNI_ARGS.
+CNI_ARGS_RE = re.compile("([a-zA-Z0-9/\.\-\_ ]+)=([a-zA-Z0-9/\.\-\_ ]+)(?:;|$)")
 
 
 class CniPlugin(object):
@@ -125,20 +129,13 @@ class CniPlugin(object):
         :param cni_args
         :return: args_to_return - dictionary of parsed cni args
         """
-        # Check if there are any args to parse.
-        if not cni_args:
-            _log.debug("No CNI_ARGS provided")
-            return {}
-
         # Dictionary to return.
         args_to_return = {}
 
-        # For each arg, split at the equal sign and add to the dictionary.
         _log.debug("Parsing CNI_ARGS: %s", cni_args)
-        for arg in cni_args.split(";"):
-            _log.debug("\tParsing CNI_ARG: %s", arg)
-            k, v = arg.split("=")
-            args_to_return[k] = v
+        for k,v in CNI_ARGS_RE.findall(cni_args):
+            _log.debug("\tParsed CNI_ARG: %s=%s", k, v)
+            args_to_return[k.strip()] = v.strip()
         _log.debug("Parsed CNI_ARGS: %s", args_to_return)
         return args_to_return
 
