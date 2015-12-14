@@ -53,9 +53,6 @@ class CniPluginFvTest(unittest.TestCase):
         self.cni_path = "/usr/bin/rkt/"
         self.cni_netns = "netns"
 
-        # Endpoint created by plugin.
-        self.endpoint = None
-
         # Mock out the datastore client.
         self.client = MagicMock(spec=DatastoreClient)
 
@@ -89,10 +86,6 @@ class CniPluginFvTest(unittest.TestCase):
             "type": self.plugin_type,
             "ipam": {
                 "type": self.ipam_type,
-                "subnet": "10.22.0.0/16",
-                "routes": [{"dst": "0.0.0.0/0"}],
-                "range-start": "",
-                "range-end": ""
             }
         }
 
