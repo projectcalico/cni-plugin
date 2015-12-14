@@ -254,13 +254,13 @@ class CniPlugin(object):
 
         _log.info("Finished removing container: %s", self.container_id)
 
-    def _assign_ip(self):
+    def _assign_ip(self, env):
         """Assigns and returns an IPv4 address using the IPAM plugin
         specified in the network config file.
 
         :return: IPAddress - The assigned IP address.
         """
-        assert self.command == CNI_CMD_ADD
+        assert env[CNI_COMMAND_ENV] == CNI_CMD_ADD
         # Call the IPAM plugin.  Returns the plugin returncode,
         # as well as the CNI result from stdout.
         _log.info("Assigning IP address")
@@ -310,7 +310,7 @@ class CniPlugin(object):
         _log.info("IPAM plugin assigned IP address: %s", assigned_ip)
         return assigned_ip
 
-    def _release_ip(self):
+    def _release_ip(self, env):
         """Releases the IP address(es) for this container using the IPAM plugin
         specified in the network config file.
 
@@ -322,7 +322,7 @@ class CniPlugin(object):
         if rc:
             _log.error("IPAM plugin failed to release IP address")
 
-    def _call_ipam_plugin(self):
+    def _call_ipam_plugin(self, env):
         """Calls through to the specified IPAM plugin.
     
         Utilizes the IPAM config as specified in the CNI network
@@ -342,8 +342,8 @@ class CniPlugin(object):
             sys.exit(1)
     
         # Execute the plugin and return the result.
-        _log.info("Using IPAM plugin: %s", plugin_path)
-        p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE)
+        _log.info("Using IPAM plugin at: %s", plugin_path)
+        p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
         stdout, stderr = p.communicate(json.dumps(self.network_config))
         _log.debug("IPAM plugin return code: %s", p.returncode)
         _log.debug("IPAM plugin output: \nstdout:\n%s\nstderr:\n%s", 
@@ -365,7 +365,7 @@ class CniPlugin(object):
         except AddrFormatError:
             message = "This node is not configured for IPv%s" % assigned_ip.version
             self._set_error_response(1, message)
-            # TODO - call release_ip / cleanup
+            self._release_ip()
             sys.exit(1)
         except KeyError:
             message = "Unable to create endpoint. BGP configuration not found." \
@@ -389,8 +389,8 @@ class CniPlugin(object):
                                          orchestrator_id=ORCHESTRATOR_ID,
                                          workload_id=self.container_id)
         except KeyError:
-            _log.warning("Unable to remove workload with ID %s from datastore",
-                       self.container_id)
+            _log.warning("Unable to remove workload with ID %s from datastore.",
+                         self.container_id)
 
     def _provision_veth(self, endpoint):
         """Provisions veth for given endpoint.
