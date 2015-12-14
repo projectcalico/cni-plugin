@@ -17,6 +17,9 @@ import sys
 import logging
 from constants import LOG_DIR
 
+# Define log formt.
+LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
+
 
 def configure_logging(logger, log_filename, log_dir=LOG_DIR, log_level=logging.DEBUG):
     """Configures logging for given logger using the given filename.
@@ -31,12 +34,44 @@ def configure_logging(logger, log_filename, log_dir=LOG_DIR, log_level=logging.D
 
     # Create a log handler and formtter and apply to _log.
     hdlr = logging.FileHandler(filename=log_path)
-    formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+    formatter = logging.Formatter(LOG_FORMAT)
     hdlr.setFormatter(formatter)
     logger.addHandler(hdlr)
     logger.setLevel(log_level)
 
+    # Attach a stderr handler to the log.
     stderr_hdlr = logging.StreamHandler(sys.stderr)
     stderr_hdlr.setLevel(logging.INFO)
     stderr_hdlr.setFormatter(formatter)
     logger.addHandler(stderr_hdlr)
+    
+
+def _log_interfaces(namespace):
+    """
+    Log interface state in namespace and default namespace.
+
+    :param namespace
+    :type namespace str
+    """
+    try:
+        if _log.isEnabledFor(logging.DEBUG):
+            interfaces = check_output(['ip', 'addr'])
+            _log.debug("Interfaces in default namespace:\n%s", interfaces)
+
+            namespaces = check_output(['ip', 'netns', 'list'])
+            _log.debug("Namespaces:\n%s", namespaces)
+
+            cmd = ['ip', 'netns', 'exec', str(namespace), 'ip', 'addr']
+            namespace_interfaces = check_output(cmd)
+
+            _log.debug("Interfaces in namespace %s:\n%s",
+                         namespace, namespace_interfaces)
+    except BaseException:
+        # Don't exit if we hit an error logging out the interfaces.
+        _log.exception("Ignoring error logging interfaces")
+
+
+# Set up logger for util.py
+LOG_FILENAME = "cni.log"
+_log = logging.getLogger(__name__)
+configure_logging(_log, LOG_FILENAME)

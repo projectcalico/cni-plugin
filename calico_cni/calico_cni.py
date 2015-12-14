@@ -16,10 +16,11 @@ from __future__ import print_function
 import logging
 import json
 import os
+import re
 import sys
 
 from subprocess32 import CalledProcessError,  Popen, PIPE
-from netaddr import IPAddress, AddrFormatError
+from netaddr import IPNetwork, AddrFormatError
 
 from pycalico import netns
 from pycalico.netns import Namespace, remove_veth
@@ -27,11 +28,16 @@ from pycalico.datastore import DatastoreClient
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from util import configure_logging
 from constants import *
+
 import policy_drivers
+from container_engines import DefaultEngine, DockerEngine
 
 # Logging configuration.
 LOG_FILENAME = "cni.log"
 _log = logging.getLogger(__name__)
+
+# Regex to parse CNI_ARGS.
+CNI_ARGS_RE = re.compile("([a-zA-Z0-9/\.\-\_ ]+)=([a-zA-Z0-9/\.\-\_ ]+)(?:;|$)")
 
 
 class CniPlugin(object):
@@ -106,6 +112,11 @@ class CniPlugin(object):
         Chooses the correct policy driver based on the given configuration
         """
 
+        self.container_engine = self._get_container_engine()
+        """
+        Chooses the correct container engine based on the given configuration.
+        """
+
         # TODO - What config do we need here and how do we get it?
         # self.calico_config = calico_config
 
@@ -118,20 +129,14 @@ class CniPlugin(object):
         :param cni_args
         :return: args_to_return - dictionary of parsed cni args
         """
-        # Check if there are any args to parse.
-        if not cni_args:
-            _log.debug("No CNI_ARGS provided")
-            return {}
-
         # Dictionary to return.
         args_to_return = {}
 
-        # For each arg, split at the equal sign and add to the dictionary.
         _log.debug("Parsing CNI_ARGS: %s", cni_args)
-        for arg in cni_args.split(";"):
-            _log.debug("\tParsing CNI_ARG: %s", arg)
-            k, v = arg.split("=")
-            args_to_return[k] = v
+        for k,v in CNI_ARGS_RE.findall(cni_args):
+            _log.debug("\tParsed CNI_ARG: %s=%s", k, v)
+            args_to_return[k.strip()] = v.strip()
+        _log.debug("Parsed CNI_ARGS: %s", args_to_return)
         return args_to_return
 
     def execute(self):
@@ -142,7 +147,7 @@ class CniPlugin(object):
         """
         rc = 0
         try:
-            _log.debug("Starting plugin execution.")
+            _log.debug("Starting plugin execution")
             self._execute()
         except SystemExit, e:
             # SystemExit indicates an error that was handled earlier
@@ -180,7 +185,14 @@ class CniPlugin(object):
 
         :return: None.
         """
-        _log.info('Configuring pod %s' % self.container_id)
+        # If this container uses host networking, don't network it.
+        if self.container_engine.uses_host_networking(self.container_id):
+            _log.info("Cannot network container %s since it is configured "
+                      "with host networking.", self.container_id)
+            sys.exit(0)
+
+        _log.info("Configuring networking for container: %s", 
+                  self.container_id)
 
         # Step 1: Assign an IP address using the given IPAM plugin.
         assigned_ip = self._assign_ip()
@@ -199,16 +211,16 @@ class CniPlugin(object):
         _log.info("Printing CNI result to stdout: %s", dump)
         print(dump)
 
-        _log.info("Finished creating pod %s", self.container_id)
+        _log.info("Finished networking container: %s", self.container_id)
     
     def delete(self):
         """Handles CNI_CMD_DELETE requests.
 
-        Remove this pod from Calico networking.
+        Remove this container from Calico networking.
 
         :return: None.
         """
-        _log.info('Deleting pod %s' % self.container_id)
+        _log.info("Remove networking from container: %s", self.container_id)
 
         # Step 1: Remove any IP assignments.
         self._release_ip()
@@ -217,12 +229,12 @@ class CniPlugin(object):
         # exist, log a warning and exit successfully.
         endpoint = self._get_endpoint()
         if not endpoint:
-            _log.info("No more to do since endpoint does not exist.",
+            _log.info("Endpoint does not exist for container: %s",
                        self.container_id)
             sys.exit(0)
 
         # Step 3: Delete the veth interface for this endpoint.
-        _log.info("Removing veth for endpoint %s", endpoint.name)
+        _log.info("Removing veth for endpoint: %s", endpoint.name)
         netns.remove_veth(endpoint.name)
 
         # Step 4: Delete the Calico endpoint.
@@ -231,7 +243,7 @@ class CniPlugin(object):
         # Step 5: Delete any profiles for this endpoint
         self.policy_driver.remove_profile()
 
-        _log.info('Finished deleting pod %s' % self.container_id)
+        _log.info("Finished removing container: %s", self.container_id)
 
     def _assign_ip(self):
         """Assigns and returns an IPv4 address using the IPAM plugin
@@ -239,26 +251,38 @@ class CniPlugin(object):
 
         :return: IPAddress - The assigned IP address.
         """
-        # TODO - Handle errors thrown by IPAM plugin
-        self.ipam_result = self._call_ipam_plugin()
-        _log.debug("IPAM plugin result: %s", self.ipam_result)
+        # Call the IPAM plugin.  Returns the plugin returncode,
+        # as well as the CNI result from stdout.
+        _log.info("Assigning IP address")
+        rc, result = self._call_ipam_plugin()
+
+        if rc:
+            # The IPAM plugin failed to assign an IP address. At this point in 
+            # execution, we haven't done anything yet, so we don't have to
+            # clean up.
+            _log.error("IPAM plugin error (rc=%s): %s", rc, result)
+            sys.exit(rc)
 
         try:
             # Load the response and get the assigned IP address.
-            self.ipam_result = json.loads(self.ipam_result)
+            self.ipam_result = json.loads(result)
         except ValueError:
-            _log.exception("Failed to parse IPAM response, exiting")
+            _log.exception("Invalid response from IPAM plugin, exiting")
+            # TODO - Make sure IP address is cleaned up.
             sys.exit(1)
 
         try:
-            assigned_ip = IPAddress(self.ipam_result["ip4"]["ip"])
+            assigned_ip = IPNetwork(self.ipam_result["ip4"]["ip"])
         except KeyError:
-            _log.error("IPAM plugin did not return an IPv4 address.")
+            _log.error("IPAM plugin did not return an IPv4 address")
+            # TODO - Make sure IP address is cleaned up.
             sys.exit(1)
         except (AddrFormatError, ValueError):
+            # TODO - Make sure IP address is cleaned up.
             _log.error("Invalid IP address %s", self.ipam_result["ip4"]["ip"])
             sys.exit(1)
 
+        _log.info("IPAM plugin assigned IP address: %s", assigned_ip)
         return assigned_ip
 
     def _release_ip(self):
@@ -267,13 +291,11 @@ class CniPlugin(object):
 
         :return: None.
         """
-        # TODO - Handle errors thrown by IPAM plugin
-        _log.debug("Releasing IP address with IPAM plugin")
-        try:
-            result = self._call_ipam_plugin()
-            _log.debug("IPAM plugin result: %s", result)
-        except CalledProcessError:
-            _log.exception("IPAM plugin failed to release IP address.")
+        _log.debug("Releasing IP address")
+        rc, result = self._call_ipam_plugin()
+
+        if rc:
+            _log.error("IPAM plugin failed to release IP address")
 
     def _call_ipam_plugin(self):
         """Calls through to the specified IPAM plugin.
@@ -289,17 +311,18 @@ class CniPlugin(object):
         # Find the correct plugin based on the given type.
         plugin_path = self._find_ipam_plugin()
         if not plugin_path:
-            _log.error("Could not find IPAM plugin of type %s in path %s.",
+            _log.error("Could not find IPAM plugin of type '%s' in path '%s'",
                        self.network_config['ipam']['type'], self.cni_path)
             sys.exit(1)
     
         # Execute the plugin and return the result.
-        _log.debug("Using IPAM plugin at: %s", plugin_path)
+        _log.info("Using IPAM plugin: %s", plugin_path)
         p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = p.communicate(json.dumps(self.network_config))
-        _log.debug("IPAM plugin output: \nstdout: %s\nstderr: %s", 
+        _log.debug("IPAM plugin return code: %s", p.returncode)
+        _log.debug("IPAM plugin output: \nstdout:\n%s\n\nstderr:\n%s\n", 
                    stdout, stderr)
-        return stdout
+        return p.returncode, stdout
 
     def _create_endpoint(self, assigned_ip):
         """Creates an endpoint in the Calico datastore with the client.
@@ -317,7 +340,7 @@ class CniPlugin(object):
             # TODO - call release_ip / cleanup
             sys.exit(1)
         except KeyError:
-            _log.error("Unable to create endpoint. BGP configuration not found."
+            _log.error("Unable to create endpoint. BGP configuration not found"
                        " Are the Calico services running?")
             # TODO - call release_ip / cleanup
             sys.exit(1)
@@ -332,12 +355,12 @@ class CniPlugin(object):
         :return: None
         """
         try:
-            _log.info("Removing endpoint from the Calico datastore.")
+            _log.info("Removing endpoint from the Calico datastore")
             self._client.remove_workload(hostname=HOSTNAME,
                                          orchestrator_id=ORCHESTRATOR_ID,
                                          workload_id=self.container_id)
         except KeyError:
-            _log.warning("Unable to remove workload with ID %s from datastore.",
+            _log.warning("Unable to remove workload with ID %s from datastore",
                        self.container_id)
 
     def _provision_veth(self, endpoint):
@@ -353,9 +376,21 @@ class CniPlugin(object):
         endpoint.mac = endpoint.provision_veth(Namespace(netns_path),
                                                self.interface)
         self._client.set_endpoint(endpoint)
-        _log.info("Provisioned veth for endpoint using netns path %s on "
-                  "interface %s", netns_path, self.interface)
+        _log.info("Provisioned %s in netns %s", self.interface, netns_path)
         return endpoint
+
+    def _get_container_engine(self):
+        """Returns a container engine based on the CNI configuration arguments.
+
+        :return: a container engine of type BaseContainerEngine.
+        """
+        if "K8S_POD_NAME" in self.cni_args:
+            _log.debug("Using Kubernetes + Docker container engine")
+            return DockerEngine()
+        else:
+            _log.debug("Using default container engine")
+            return DefaultEngine()
+
 
     def _get_policy_driver(self):
         """Returns a policy driver based on CNI configuration arguments.
@@ -365,13 +400,13 @@ class CniPlugin(object):
         try:
             self.cni_args["K8S_POD_NAME"]
         except KeyError:
-            _log.debug("Using Default Policy Driver")
+            _log.debug("Using default dolicy driver")
             try:
                 driver = policy_drivers.DefaultPolicyDriver(self.network_name)
             except ValueError:
-                _log.error("Invalid characters detected in the network name,"
-                           " %s. Only letters a-z, numbers 0-9, and symbols _.-"
-                           " are supported.", self.network_name)
+                _log.error("Invalid characters detected in the network name "
+                           "'%s'. Only letters a-z, numbers 0-9, and _.- "
+                           " are supported", self.network_name)
                 sys.exit(1)
         else:
             _log.debug("Using Default Kubernetes Policy Driver")
@@ -419,10 +454,10 @@ class CniPlugin(object):
         plugin_type = self.network_config['ipam']['type']
         plugin_path = ""
         for path in self.cni_path.split(":"):
-            _log.debug("Looking for plugin %s in path %s.", plugin_type, path)
+            _log.debug("Looking for plugin %s in path %s", plugin_type, path)
             temp_path = os.path.abspath(os.path.join(path, plugin_type))
             if os.path.isfile(temp_path):
-                _log.debug("Found plugin %s in path %s.", plugin_type, path)
+                _log.debug("Found plugin %s in path %s", plugin_type, path)
                 plugin_path = temp_path
                 break
 

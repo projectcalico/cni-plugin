@@ -7,7 +7,7 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 default: all
 all: binary test
 binary: dist/calico dist/calico-ipam
-test: ut
+test: ut fv
 plugin: dist/calico
 ipam: dist/calico-ipam
 
@@ -44,8 +44,13 @@ ut:
 	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
 	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
 	calico/test \
-	nosetests calico_cni/tests -c nose.cfg
+	nosetests calico_cni/tests/unit -c nose.cfg
 
+fv: 
+	docker run --rm -v `pwd`/calico_cni:/code/calico_cni \
+	-v `pwd`/calico_cni/nose.cfg:/code/nose.cfg \
+	calico/test \
+	nosetests calico_cni/tests/fv -c nose.cfg
 
 clean:
 	-rm -f *.created
