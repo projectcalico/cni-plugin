@@ -16,7 +16,7 @@ import os
 import sys
 import json
 import unittest
-from mock import patch, MagicMock, call
+from mock import patch, MagicMock, Mock, call
 from netaddr import IPAddress, IPNetwork
 from subprocess32 import CalledProcessError, Popen, PIPE
 from nose.tools import assert_equal, assert_true, assert_false, assert_raises
@@ -132,7 +132,7 @@ class CniPluginTest(unittest.TestCase):
         rc = self.plugin.execute()
 
         # Assert success.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
     def test__execute_add_mainline(self):
         """Test _execute() ADD
@@ -174,11 +174,15 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._provision_veth = MagicMock(spec=self.plugin._provision_veth)
         self.plugin._provision_veth.return_value = endpoint
 
+        # Mock out environment
+        m_env = Mock(spec=dict)
+        self.plugin.env = m_env
+
         # Call method.
         self.plugin.add()
 
         # Assert.
-        self.plugin._assign_ip.assert_called_once_with()
+        self.plugin._assign_ip.assert_called_once_with(m_env)
         self.plugin._create_endpoint.assert_called_once_with(assigned_ip)
         self.plugin._provision_veth.assert_called_once_with(endpoint)
         self.plugin.policy_driver.set_profile.assert_called_once_with(endpoint)
@@ -198,11 +202,15 @@ class CniPluginTest(unittest.TestCase):
         # Mock out _remove_endpoint.
         self.plugin._remove_endpoint = MagicMock(spec=self.plugin._remove_endpoint)
 
+        # Mock out environment
+        m_env = Mock(spec=dict)
+        self.plugin.env = m_env
+
         # Call delete()
         self.plugin.delete()
 
         # Assert.
-        self.plugin._release_ip.assert_called_once_with()
+        self.plugin._release_ip.assert_called_once_with(m_env)
         self.plugin._get_endpoint.assert_called_once_with()
         self.plugin._remove_endpoint.assert_called_once_with()
         m_netns.remove_veth.assert_called_once_with("cali12345")
@@ -215,9 +223,10 @@ class CniPluginTest(unittest.TestCase):
         ipam_result = json.dumps({"ip4": {"ip": ip4}, "ip6": {"ip": ""}})
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
         self.plugin._call_ipam_plugin.return_value = rc, ipam_result
+        env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
 
         # Call _assign_ip.
-        assigned_ip = self.plugin._assign_ip()
+        assigned_ip = self.plugin._assign_ip(env)
 
         # Assert.
         assert_equal(assigned_ip, IPNetwork(ip4))
@@ -226,10 +235,11 @@ class CniPluginTest(unittest.TestCase):
         # Mock _call_ipam_plugin.
         rc = 0
         self.plugin._call_ipam_plugin = MagicMock(spec=self.plugin._call_ipam_plugin)
-        self.plugin._call_ipam_plugin.return_value = rc, "" 
+        self.plugin._call_ipam_plugin.return_value = rc, ""
+        env = {CNI_COMMAND_ENV: CNI_CMD_DELETE}
 
         # Call _release_ip.
-        self.plugin._release_ip()
+        self.plugin._release_ip(env)
 
     @patch("calico_cni.Popen", autospec=True)
     def test_call_ipam_plugin_mainline(self, m_popen):
@@ -245,15 +255,17 @@ class CniPluginTest(unittest.TestCase):
         m_proc.communicate.return_value = (stdout, stderr)
         m_proc.returncode = 0
         m_popen.return_value = m_proc
+        env = {}
 
         # Call _call_ipam_plugin.
-        rc, result = self.plugin._call_ipam_plugin()
+        rc, result = self.plugin._call_ipam_plugin(env)
 
         # Assert.
         assert_equal(rc, 0)
         m_popen.assert_called_once_with(plugin_path, 
                                         stdin=PIPE, 
                                         stdout=PIPE, 
-                                        stderr=PIPE)
+                                        stderr=PIPE,
+                                        env=env)
         m_proc.communicate.assert_called_once_with(json.dumps(self.plugin.network_config))
         assert_equal(result, stdout)

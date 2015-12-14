@@ -268,7 +268,7 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
@@ -296,7 +296,7 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
@@ -329,7 +329,7 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 

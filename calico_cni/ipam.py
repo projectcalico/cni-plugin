@@ -94,8 +94,8 @@ class IpamPlugin(object):
         pool = (ipv4_pool, ipv6_pool)
         try:
             ipv4_addrs, ipv6_addrs = datastore_client.auto_assign_ips(
-                    num_v4=1, num_v6=1, handle_id=handle_id, 
-                    attributes=None, pool=pool
+                num_v4=1, num_v6=1, handle_id=handle_id, attributes=None,
+                pool=pool
             )
             _log.debug("Allocated ip4s: %s, ip6s: %s", ipv4_addrs, ipv6_addrs)
         except RuntimeError as err:
@@ -117,7 +117,7 @@ class IpamPlugin(object):
                 _log.error("No IPv6 address returned, exiting")
                 _exit_on_error(code=ERR_CODE_FAILED_ASSIGNMENT,
                                message="No IPv6 addresses returned",
-                               details = "")
+                               details="")
 
             _log.info("Assigned IPv4: %s, IPv6: %s", ipv4, ipv6)
             return IPNetwork(ipv4), IPNetwork(ipv6)
@@ -161,7 +161,7 @@ def _exit_on_error(code, message, details=""):
     :return:
     """
     _log.error("Exiting with: `%s: %s`", message, details)
-    print json.dumps({"code": code, "message": message, "details": details})
+    print json.dumps({"code": code, "msg": message, "details": details})
     sys.exit(code)
 
 

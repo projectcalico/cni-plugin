@@ -107,12 +107,6 @@ class CniPlugin(object):
         to stdout at the end of execution.
         """
 
-        self.error_response = None
-        """
-        Stores an error response if an error is hit during plugin execution.
-        This is printed to stdout at the end of execution.
-        """
-
         self.policy_driver = self._get_policy_driver()
         """
         Chooses the correct policy driver based on the given configuration
@@ -155,19 +149,14 @@ class CniPlugin(object):
         except SystemExit, e:
             # SystemExit indicates an error that was handled earlier
             # in the stack.  Just set the return code.
-            _log.debug("Handling SystemExit, rc=%s", e.code)
             rc = e.code
         except BaseException:
             # An unexpected Exception has bubbled up - catch it and
             # log it out.
             _log.exception("Unhandled Exception killed plugin")
-            self._set_error_response(rc, "Unhandled Exception killed plugin")
+            rc = ERR_CODE_GENERIC
+            self._print_error_response(rc, "Unhandled Exception killed plugin")
         finally:
-            # If we hit an error, print the error response to stdout.
-            if self.error_response:
-                _log.error("Printing error response to stdout.")
-                print(self.error_response)
-                rc = self.error_response["code"]
             _log.debug("Execution complete, rc=%s", rc)
             return rc
 
@@ -204,7 +193,7 @@ class CniPlugin(object):
                   self.container_id)
 
         # Step 1: Assign an IP address using the given IPAM plugin.
-        assigned_ip = self._assign_ip()
+        assigned_ip = self._assign_ip(self.env)
 
         # Step 2: Create the Calico endpoint object.
         endpoint = self._create_endpoint(assigned_ip)
@@ -232,7 +221,7 @@ class CniPlugin(object):
         _log.info("Remove networking from container: %s", self.container_id)
 
         # Step 1: Remove any IP assignments.
-        self._release_ip()
+        self._release_ip(self.env)
 
         # Step 2: Get the Calico endpoint for this workload. If it does not
         # exist, log a warning and exit successfully.
@@ -264,7 +253,7 @@ class CniPlugin(object):
         # Call the IPAM plugin.  Returns the plugin returncode,
         # as well as the CNI result from stdout.
         _log.info("Assigning IP address")
-        rc, result = self._call_ipam_plugin()
+        rc, result = self._call_ipam_plugin(env)
 
         if rc:
             # The IPAM plugin failed to assign an IP address. At this point in 
@@ -280,32 +269,34 @@ class CniPlugin(object):
         except ValueError:
             message = "Failed to parse IPAM response, exiting"
             _log.exception(message)
-            self._set_error_response(1, message)
-            sys.exit(1)
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
 
         try:
             # Check to see if the response returned from the IPAM plugin
             # is an error response.
             error_code = self.ipam_result["code"]
+            message = self.ipam_result["msg"]
+            details = self.ipam_result["details"]
         except KeyError:
             # IPAM plugin did not hit any errors.
             _log.debug("IPAM plugin did not return any errors.")
         else:
             # IPAM plugin hit an error. Set to error_response and exit.
             _log.debug("IPAM plugin returned an error.")
-            self.error_response = self.ipam_result
+            self._print_error_response(error_code, message, details)
             sys.exit(error_code)
 
         try:
-            assigned_ip = IPAddress(self.ipam_result["ip4"]["ip"])
+            assigned_ip = IPNetwork(self.ipam_result["ip4"]["ip"])
         except KeyError:
-            message =  "IPAM plugin did not return an IPv4 address."
-            self._set_error_response(1, message)
-            sys.exit(1)
+            message = "IPAM plugin did not return an IPv4 address."
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
         except (AddrFormatError, ValueError):
             message = "Invalid IP address %s" % self.ipam_result["ip4"]["ip"]
-            self._set_error_response(1, message)
-            sys.exit(1)
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
 
         _log.info("IPAM plugin assigned IP address: %s", assigned_ip)
         return assigned_ip
@@ -318,6 +309,7 @@ class CniPlugin(object):
         """
         _log.info("Releasing IP address")
         rc, result = self._call_ipam_plugin()
+        assert env[CNI_COMMAND_ENV] == CNI_CMD_DELETE
 
         if rc:
             _log.error("IPAM plugin failed to release IP address")
@@ -338,8 +330,8 @@ class CniPlugin(object):
         if not plugin_path:
             message = "Could not find IPAM plugin of type %s in path %s." % \
                       (self.network_config['ipam']['type'], self.cni_path)
-            self._set_error_response(1, message)
-            sys.exit(1)
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
     
         # Execute the plugin and return the result.
         _log.info("Using IPAM plugin at: %s", plugin_path)
@@ -363,16 +355,18 @@ class CniPlugin(object):
                                                     self.container_id,
                                                     [assigned_ip])
         except AddrFormatError:
+            self.env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
+            self._release_ip(self.env)
             message = "This node is not configured for IPv%s" % assigned_ip.version
-            self._set_error_response(1, message)
-            self._release_ip()
-            sys.exit(1)
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
         except KeyError:
+            self.env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
+            self._release_ip(self.env)
             message = "Unable to create endpoint. BGP configuration not found." \
-                      " Are the Calico services running?")
-            self._set_error_response(1, message)
-            # TODO - call release_ip / cleanup
-            sys.exit(1)
+                      " Are the Calico services running?"
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
 
         _log.info("Created Calico endpoint with IP address %s", assigned_ip)
         return endpoint
@@ -425,7 +419,6 @@ class CniPlugin(object):
             _log.debug("Using default container engine")
             return DefaultEngine()
 
-
     def _get_policy_driver(self):
         """Returns a policy driver based on CNI configuration arguments.
 
@@ -434,15 +427,17 @@ class CniPlugin(object):
         try:
             self.cni_args[K8S_POD_NAME]
         except KeyError:
-            _log.debug("Using default dolicy driver")
+            _log.debug("Using default policy driver")
             try:
                 driver = policy_drivers.DefaultPolicyDriver(self.network_name)
             except ValueError:
+                self.env["command"] = CNI_CMD_DELETE
+                self._release_ip(self.env)
                 message = "Invalid characters detected in the network name, " \
                           "%s. Only letters a-z, numbers 0-9, and symbols _.-" \
                            " are supported." % self.network_name
-                self._set_error_response(1, message)
-                sys.exit(1)
+                self._print_error_response(ERR_CODE_GENERIC, message)
+                sys.exit(ERR_CODE_GENERIC)
         else:
             _log.debug("Using Default Kubernetes Policy Driver")
             driver = policy_drivers.KubernetesDefaultPolicyDriver()
@@ -470,9 +465,8 @@ class CniPlugin(object):
             _log.warning("No endpoint found matching ID %s", self.container_id)
             endpoint = None
         except MultipleEndpointsMatch:
-            message = "Multiple endpoints found matching ID %s" % self.container_id
-            self._set_error_response(1, message)
-            sys.exit(1)
+            _log.warning("Multiple endpoints found matching ID %s", self.container_id)
+            endpoint = None
 
         return endpoint
 
@@ -498,19 +492,19 @@ class CniPlugin(object):
                 break
         return str(plugin_path)
 
-    def _set_error_response(self, code, message, details=None):
-        """Set the error_reponse class attribute with a json formatted reponse
+    def _print_error_response(self, code, message, details=None):
+        """Print a json formatted error response according to the CNI spec.
 
         :return: None
         """
-        assert not self.error_response, "An error has already been hit " \
-                                        "during execution."
         _log.error("Exiting with: %s", message)
         error_response = {
-            "cniVersion": "0.1.0", "code": code,
-            "message": message, "details": details
+            "cniVersion": "0.1.0",
+            "code": code,
+            "msg": message,
+            "details": details
         }
-        self.error_response = json.loads(error_response)
+        print(json.dumps(error_response))
 
 
 def main():

@@ -16,6 +16,7 @@ import os
 import sys
 import logging
 from constants import LOG_DIR
+from subprocess32 import check_output
 
 # Define log formt.
 LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
