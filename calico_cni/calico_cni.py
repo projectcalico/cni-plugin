@@ -476,7 +476,7 @@ def main():
     network_config = json.loads(config_raw).copy()
 
     # Get the log level from the config file, default to INFO.
-    log_level = network_config.get(LOG_LEVEL_KEY, logging.INFO).upper()
+    log_level = network_config.get(LOG_LEVEL_KEY, "INFO").upper()
 
     # Configure logging.
     configure_logging(_log, LOG_FILENAME, log_level=log_level)
