@@ -323,7 +323,7 @@ class CniPluginFvTest(unittest.TestCase):
         p = self.create_plugin()
 
         # Configure EtcdException when setting profile.
-        p.policy_driver._client.set_profiles_on_endpoint.side_effect = MagicMock(side_effect=EtcdException)
+        p.policy_driver._client.set_profiles_on_endpoint.side_effect = MagicMock(side_effect=KeyError)
 
         # Execute.
         rc = p.execute()

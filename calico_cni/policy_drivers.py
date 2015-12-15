@@ -16,6 +16,7 @@ import logging
 from util import configure_logging
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_datatypes import Rule, Rules
+from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.util import validate_characters
 
 KUBERNETES_DEFAULT_PROFILE = "default_profile"
@@ -64,8 +65,15 @@ class BasePolicyDriver(object):
         # Set the default profile on this pod's Calico endpoint.
         _log.info("Setting profile '%s' on endpoint %s",
                   self.profile_name, endpoint.endpoint_id)
-        self._client.set_profiles_on_endpoint(profile_names=[self.profile_name],
-                                              endpoint_id=endpoint.endpoint_id)
+        try:
+            self._client.set_profiles_on_endpoint(
+                profile_names=[self.profile_name],
+                endpoint_id=endpoint.endpoint_id
+            )
+        except (KeyError, MultipleEndpointsMatch), e:
+            _log.exception("Failed to apply profile to endpoint %s: %s",
+                           endpoint.name, e.message)
+            raise ApplyProfileError(e.message)
 
     def remove_profile(self):
         """Remove the profile if there are no endpoints attached.
@@ -92,7 +100,8 @@ class DefaultPolicyDriver(BasePolicyDriver):
         BasePolicyDriver.__init__(self)
         if not validate_characters(network_name):
             raise ValueError("Invalid characters detected in the given network "
-                             "name, %s.", network_name)
+                             "name, %s. Only letters a-z, numbers 0-9, and "
+                             "symbols _.- are supported.", network_name)
         self.profile_name = network_name
 
     def remove_profile(self):
@@ -155,3 +164,15 @@ class KubernetesDefaultPolicyDriver(BasePolicyDriver):
                       inbound_rules=[allow],
                       outbound_rules=[allow])
         return rules
+
+class ApplyProfileError(Exception):
+    """
+    Attempting to apply a profile to an endpoint that does not exist.
+    """
+    pass
+
+class RemoveProfileError(Exception):
+    """
+    Attempting to remove a profile that does not exist.
+    """
+    pass

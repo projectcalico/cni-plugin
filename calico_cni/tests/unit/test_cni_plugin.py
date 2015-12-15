@@ -132,7 +132,7 @@ class CniPluginTest(unittest.TestCase):
         rc = self.plugin.execute()
 
         # Assert success.
-        assert_equal(rc, ERR_CODE_GENERIC)
+        assert_equal(rc, ERR_CODE_UNHANDLED)
 
     def test__execute_add_mainline(self):
         """Test _execute() ADD
@@ -174,15 +174,11 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._provision_veth = MagicMock(spec=self.plugin._provision_veth)
         self.plugin._provision_veth.return_value = endpoint
 
-        # Mock out environment
-        m_env = Mock(spec=dict)
-        self.plugin.env = m_env
-
         # Call method.
         self.plugin.add()
 
         # Assert.
-        self.plugin._assign_ip.assert_called_once_with(m_env)
+        self.plugin._assign_ip.assert_called_once_with(self.plugin.env)
         self.plugin._create_endpoint.assert_called_once_with(assigned_ip)
         self.plugin._provision_veth.assert_called_once_with(endpoint)
         self.plugin.policy_driver.set_profile.assert_called_once_with(endpoint)
@@ -202,15 +198,11 @@ class CniPluginTest(unittest.TestCase):
         # Mock out _remove_endpoint.
         self.plugin._remove_endpoint = MagicMock(spec=self.plugin._remove_endpoint)
 
-        # Mock out environment
-        m_env = Mock(spec=dict)
-        self.plugin.env = m_env
-
         # Call delete()
         self.plugin.delete()
 
         # Assert.
-        self.plugin._release_ip.assert_called_once_with(m_env)
+        self.plugin._release_ip.assert_called_once_with(self.plugin.env)
         self.plugin._get_endpoint.assert_called_once_with()
         self.plugin._remove_endpoint.assert_called_once_with()
         m_netns.remove_veth.assert_called_once_with("cali12345")
