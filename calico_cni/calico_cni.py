@@ -207,6 +207,8 @@ class CniPlugin(object):
         except policy_drivers.ApplyProfileError, e:
             _log.error("Failed to create set profile for endpoint %s",
                        endpoint.name)
+            self._remove_veth(endpoint)
+            self._remove_endpoint()
             env = self.env.copy()
             env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
             self._release_ip(env)
@@ -241,12 +243,7 @@ class CniPlugin(object):
             sys.exit(0)
 
         # Step 3: Delete the veth interface for this endpoint.
-        _log.info("Removing veth for endpoint: %s", endpoint.name)
-        try:
-            if not netns.remove_veth(endpoint.name):
-                _log.warning("Veth for host %s does not exist.", endpoint.name)
-        except CalledProcessError:
-            _log.warning("Unable to remove veth for host %s.", endpoint.name)
+        self._remove_veth(endpoint)
 
         # Step 4: Delete the Calico endpoint.
         self._remove_endpoint()
@@ -311,8 +308,8 @@ class CniPlugin(object):
         :return: None.
         """
         _log.info("Releasing IP address")
-        rc, result = self._call_ipam_plugin()
         assert env[CNI_COMMAND_ENV] == CNI_CMD_DELETE
+        rc, result = self._call_ipam_plugin(env)
 
         if rc:
             _log.error("IPAM plugin failed to release IP address")
@@ -402,13 +399,42 @@ class CniPlugin(object):
         netns_path = os.path.abspath(os.path.join(os.getcwd(), self.cni_netns))
         _log.debug("netns path: %s", netns_path)
 
-        endpoint.mac = endpoint.provision_veth(Namespace(netns_path),
-                                               self.interface)
+        try:
+            endpoint.mac = endpoint.provision_veth(
+                Namespace(netns_path), self.interface)
+        except CalledProcessError, e:
+            _log.exception("Failed to provision veth interface for endpoint %s",
+                           endpoint.name)
+            self._remove_endpoint()
+            env = self.env.copy()
+            env[CNI_COMMAND_ENV] = CNI_CMD_DELETE
+            self._release_ip(env)
+            self._print_error_response(ERR_CODE_GENERIC, e.message)
+            sys.exit(ERR_CODE_GENERIC)
+
         _log.debug("Endpoint has mac address: %s", endpoint.mac)
 
         self._client.set_endpoint(endpoint)
         _log.info("Provisioned %s in netns %s", self.interface, netns_path)
         return endpoint
+
+    def _remove_veth(self, endpoint):
+        """Remove the veth from given endpoint
+
+        Handles errors and logs warnings if operation was unsuccessful
+
+        :return: Boolean - True if veth was removed, False if veth could not be removed
+        """
+        _log.info("Removing veth for endpoint: %s", endpoint.name)
+        try:
+            if not netns.remove_veth(endpoint.name):
+                _log.warning("Veth %s does not exist", endpoint.name)
+                return False
+        except CalledProcessError:
+            _log.warning("Unable to remove veth %s", endpoint.name)
+            return False
+
+        return True
 
     def _get_container_engine(self):
         """Returns a container engine based on the CNI configuration arguments.

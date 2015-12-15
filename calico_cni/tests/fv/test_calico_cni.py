@@ -16,7 +16,6 @@ import os
 import sys
 import json
 import unittest
-from etcd import EtcdException
 from mock import patch, MagicMock, call, ANY
 from netaddr import IPAddress, IPNetwork
 from subprocess32 import CalledProcessError, Popen, PIPE

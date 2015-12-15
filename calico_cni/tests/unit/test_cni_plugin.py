@@ -131,7 +131,7 @@ class CniPluginTest(unittest.TestCase):
         # Call execute()
         rc = self.plugin.execute()
 
-        # Assert success.
+        # Assert returns unhandled error code
         assert_equal(rc, ERR_CODE_UNHANDLED)
 
     def test__execute_add_mainline(self):

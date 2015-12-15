@@ -170,9 +170,3 @@ class ApplyProfileError(Exception):
     Attempting to apply a profile to an endpoint that does not exist.
     """
     pass
-
-class RemoveProfileError(Exception):
-    """
-    Attempting to remove a profile that does not exist.
-    """
-    pass
