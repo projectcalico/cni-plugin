@@ -144,7 +144,7 @@ class CniPlugin(object):
         """
         rc = 0
         try:
-            _log.debug("Starting plugin execution")
+            _log.info("Starting Calico CNI plugin execution")
             self._execute()
         except SystemExit, e:
             # SystemExit indicates an error that was handled earlier
@@ -157,7 +157,7 @@ class CniPlugin(object):
             rc = ERR_CODE_UNHANDLED
             self._print_error_response(rc, "Unhandled Exception killed plugin")
         finally:
-            _log.debug("Execution complete, rc=%s", rc)
+            _log.info("Calico CNI execution complete, rc=%s", rc)
             return rc
 
     def _execute(self):
@@ -201,11 +201,11 @@ class CniPlugin(object):
         endpoint = self._get_endpoint()
         if endpoint:
             # This endpoint already exists, add it to another network.
-            _log.debug("Endpoint for container exists - add to new profile")
+            _log.info("Endpoint for container exists - add to new network")
             output = self._add_existing_endpoint(endpoint)
         else:
             # No endpoint exists - we need to configure a new one.
-            _log.debug("Configuring a new endpoint for container")
+            _log.info("Configuring a new Endpoint for container")
             output = self._add_new_endpoint()
 
         # If all successful, print the IPAM plugin's output to stdout.
@@ -289,8 +289,8 @@ class CniPlugin(object):
         # exist, log a warning and exit successfully.
         endpoint = self._get_endpoint()
         if not endpoint:
-            _log.info("Endpoint does not exist for container: %s",
-                       self.container_id)
+            _log.warning("No Calico Endpoint for container: %s",
+                         self.container_id)
             sys.exit(0)
 
         # Step 3: Delete the veth interface for this endpoint.
@@ -312,7 +312,7 @@ class CniPlugin(object):
         """
         # Call the IPAM plugin.  Returns the plugin returncode,
         # as well as the CNI result from stdout.
-        _log.info("Assigning IP address")
+        _log.debug("Assigning IP address")
         assert env[CNI_COMMAND_ENV] == CNI_CMD_ADD
         rc, result = self._call_ipam_plugin(env)
 
@@ -548,7 +548,7 @@ class CniPlugin(object):
         :return: Calico endpoint object if found, None if not found
         """
         try:
-            _log.info("Retrieving endpoint that matches container ID %s",
+            _log.debug("Looking for endpoint that matches container ID %s",
                       self.container_id)
             endpoint = self._client.get_endpoint(
                 hostname=HOSTNAME,
@@ -556,7 +556,7 @@ class CniPlugin(object):
                 workload_id=self.container_id
             )
         except KeyError:
-            _log.warning("No endpoint found matching ID %s", self.container_id)
+            _log.debug("No endpoint found matching ID %s", self.container_id)
             endpoint = None
         except MultipleEndpointsMatch:
             message = "Multiple endpoints found matching ID %s" % self.container_id
