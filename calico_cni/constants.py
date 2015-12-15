@@ -14,6 +14,7 @@
 
 import socket
 
+
 # Calico Configuration Constants
 ETCD_AUTHORITY_ENV = 'ETCD_AUTHORITY'
 
@@ -33,6 +34,18 @@ CNI_PATH_ENV = "CNI_PATH"
 # CNI Constants
 CNI_CMD_ADD = "ADD"
 CNI_CMD_DELETE = "DEL"
+
+# Kubernetes Constants
+K8S_POD_NAME = "K8S_POD_NAME"
+K8S_NAMESPACE = "K8S_NAMESPACE"
+
+# Constants for getting Calico configuration from the network
+# configuration file.
+ETCD_AUTHORITY_KEY = "etcd_authority"
+LOG_LEVEL_KEY = "log_level"
+
+# Default ETCD_AUTHORITY.
+DEFAULT_ETCD_AUTHORITY="127.0.0.1:2379"
 
 # CNI Error Codes
 ERR_CODE_UNHANDLED = 100

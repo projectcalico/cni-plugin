@@ -117,9 +117,6 @@ class CniPlugin(object):
         Chooses the correct container engine based on the given configuration.
         """
 
-        # TODO - What config do we need here and how do we get it?
-        # self.calico_config = calico_config
-
     def parse_cni_args(self, cni_args):
         """Parses the given CNI_ARGS string into key value pairs
         and returns a dictionary containing the arguments.
@@ -152,6 +149,7 @@ class CniPlugin(object):
         except SystemExit, e:
             # SystemExit indicates an error that was handled earlier
             # in the stack.  Just set the return code.
+            _log.debug("Handling SystemExit, rc=%s", e.code)
             rc = e.code 
         except BaseException:
             # An unexpected Exception has bubbled up - catch it and
@@ -208,7 +206,7 @@ class CniPlugin(object):
 
         # Step 5: If all successful, print the IPAM plugin's output to stdout.
         dump = json.dumps(self.ipam_result)
-        _log.info("Printing CNI result to stdout: %s", dump)
+        _log.debug("Printing CNI result to stdout: %s", dump)
         print(dump)
 
         _log.info("Finished networking container: %s", self.container_id)
@@ -291,7 +289,7 @@ class CniPlugin(object):
 
         :return: None.
         """
-        _log.debug("Releasing IP address")
+        _log.info("Releasing IP address")
         rc, result = self._call_ipam_plugin()
 
         if rc:
@@ -320,7 +318,7 @@ class CniPlugin(object):
         p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE)
         stdout, stderr = p.communicate(json.dumps(self.network_config))
         _log.debug("IPAM plugin return code: %s", p.returncode)
-        _log.debug("IPAM plugin output: \nstdout:\n%s\n\nstderr:\n%s\n", 
+        _log.debug("IPAM plugin output: \nstdout:\n%s\nstderr:\n%s", 
                    stdout, stderr)
         return p.returncode, stdout
 
@@ -330,6 +328,7 @@ class CniPlugin(object):
         :param assigned_ip - IPAddress that has been already allocated
         :return Calico endpoint object
         """
+        _log.debug("Creating Calico endpoint")
         try:
             endpoint = self._client.create_endpoint(HOSTNAME,
                                                     ORCHESTRATOR_ID,
@@ -372,9 +371,14 @@ class CniPlugin(object):
         :param endpoint
         :return Calico endpoint object
         """
+        _log.debug("Provisioning Calico veth interface")
         netns_path = os.path.abspath(os.path.join(os.getcwd(), self.cni_netns))
+        _log.debug("netns path: %s", netns_path)
+
         endpoint.mac = endpoint.provision_veth(Namespace(netns_path),
                                                self.interface)
+        _log.debug("Endpoint has mac address: %s", endpoint.mac)
+
         self._client.set_endpoint(endpoint)
         _log.info("Provisioned %s in netns %s", self.interface, netns_path)
         return endpoint
@@ -384,7 +388,7 @@ class CniPlugin(object):
 
         :return: a container engine of type BaseContainerEngine.
         """
-        if "K8S_POD_NAME" in self.cni_args:
+        if K8S_POD_NAME in self.cni_args:
             _log.debug("Using Kubernetes + Docker container engine")
             return DockerEngine()
         else:
@@ -398,7 +402,7 @@ class CniPlugin(object):
         :return: a policy driver of type BasePolicyDriver
         """
         try:
-            self.cni_args["K8S_POD_NAME"]
+            self.cni_args[K8S_POD_NAME]
         except KeyError:
             _log.debug("Using default dolicy driver")
             try:
@@ -460,7 +464,6 @@ class CniPlugin(object):
                 _log.debug("Found plugin %s in path %s", plugin_type, path)
                 plugin_path = temp_path
                 break
-
         return str(plugin_path)
 
 
@@ -468,21 +471,28 @@ def main():
     """
     Main function - configures and runs the plugin.
     """
-    # Get Calico config from config file.
-    # TODO - Is this the correct way to get config in CNI? What config
-    # do we need?
+    # Read the network config file from stdin. 
+    config_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
+    network_config = json.loads(config_raw).copy()
+
+    # Get the log level from the config file, default to INFO.
+    log_level = network_config.get(LOG_LEVEL_KEY, logging.INFO).upper()
 
     # Configure logging.
-    configure_logging(_log, LOG_FILENAME)
+    configure_logging(_log, LOG_FILENAME, log_level=log_level)
+    _log.debug("Loaded network config:\n%s", 
+               json.dumps(network_config, indent=2))
+
+    # Get the etcd authority from the config file. Set the 
+    # environment variable.
+    etcd_authority = network_config.get(ETCD_AUTHORITY_KEY, 
+                                        DEFAULT_ETCD_AUTHORITY)
+    os.environ[ETCD_AUTHORITY_ENV] = etcd_authority
+    _log.debug("Using ETCD_AUTHORITY=%s", etcd_authority)
 
     # Get the CNI environment. 
     env = os.environ.copy()
     _log.debug("Loaded environment:\n%s", json.dumps(env, indent=2))
-
-    # Read the network config file from stdin. 
-    config_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
-    network_config = json.loads(config_raw).copy()
-    _log.debug("Loaded network config:\n%s", json.dumps(network_config, indent=2))
 
     # Create the plugin, passing in the network config, environment,
     # and the Calico configuration options.
@@ -493,4 +503,8 @@ def main():
 
 
 if __name__ == '__main__': # pragma: no cover
-    main()
+    try:
+        main()
+    except Exception, e:
+        print("Unhandled Exception in main(): %s" % e)
+        sys.exit(ERR_CODE_UNHANDLED)
