@@ -19,7 +19,7 @@ import os
 import re
 import sys
 
-from subprocess32 import CalledProcessError,  Popen, PIPE
+from subprocess32 import CalledProcessError, Popen, PIPE
 from netaddr import IPNetwork, AddrFormatError
 
 from pycalico import netns
@@ -193,10 +193,10 @@ class CniPlugin(object):
                   self.container_id)
 
         # Step 1: Assign an IP address using the given IPAM plugin.
-        assigned_ip = self._assign_ip(self.env)
+        ipv4, ipv6 = self._assign_ips(self.env)
 
         # Step 2: Create the Calico endpoint object.
-        endpoint = self._create_endpoint(assigned_ip)
+        endpoint = self._create_endpoint([ipv4, ipv6])
 
         # Step 3: Provision the veth for this endpoint.
         endpoint = self._provision_veth(endpoint)
@@ -253,11 +253,11 @@ class CniPlugin(object):
 
         _log.info("Finished removing container: %s", self.container_id)
 
-    def _assign_ip(self, env):
+    def _assign_ips(self, env):
         """Assigns and returns an IPv4 address using the IPAM plugin
         specified in the network config file.
 
-        :return: IPAddress - The assigned IP address.
+        :return: ipv4, ipv6 - The IP addresses assigned by the IPAM plugin.
         """
         # Call the IPAM plugin.  Returns the plugin returncode,
         # as well as the CNI result from stdout.
@@ -286,18 +286,32 @@ class CniPlugin(object):
             sys.exit(int(code))
 
         try:
-            assigned_ip = IPNetwork(self.ipam_result["ip4"]["ip"])
+            ipv4 = IPNetwork(self.ipam_result["ip4"]["ip"])
         except KeyError:
-            message = "IPAM plugin did not return an IPv4 and IPv6 address."
+            message = "IPAM plugin did not return an IPv4 address."
             self._print_error_response(ERR_CODE_GENERIC, message)
             sys.exit(ERR_CODE_GENERIC)
         except (AddrFormatError, ValueError):
-            message = "Invalid IP address %s" % self.ipam_result["ip4"]["ip"]
+            message = "Invalid or Empty IPv4 address: %s" % \
+                      (self.ipam_result["ip4"]["ip"])
             self._print_error_response(ERR_CODE_GENERIC, message)
             sys.exit(ERR_CODE_GENERIC)
 
-        _log.info("IPAM plugin assigned IP addresses: %s", assigned_ip)
-        return assigned_ip
+        try:
+            ipv6 = IPNetwork(self.ipam_result["ip6"]["ip"])
+        except KeyError:
+            message = "IPAM plugin did not return an IPv6 address."
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
+        except (AddrFormatError, ValueError):
+            message = "Invalid or Empty IPv6 address: %s" % \
+                      (self.ipam_result["ip6"]["ip"])
+            self._print_error_response(ERR_CODE_GENERIC, message)
+            sys.exit(ERR_CODE_GENERIC)
+
+        _log.info("IPAM plugin assigned IPv4 address: %s", ipv4)
+        _log.info("IPAM plugin assigned IPv6 address: %s", ipv6)
+        return ipv4, ipv6
 
     def _release_ip(self, env):
         """Releases the IP address(es) for this container using the IPAM plugin
@@ -337,6 +351,8 @@ class CniPlugin(object):
     
         # Execute the plugin and return the result.
         _log.info("Using IPAM plugin at: %s", plugin_path)
+        _log.debug("Passing in environment to IPAM plugin: \n%s",
+                   json.dumps(env, indent=2))
         p = Popen(plugin_path, stdin=PIPE, stdout=PIPE, stderr=PIPE, env=env)
         stdout, stderr = p.communicate(json.dumps(self.network_config))
         _log.debug("IPAM plugin return code: %s", p.returncode)
@@ -344,10 +360,10 @@ class CniPlugin(object):
                    stdout, stderr)
         return p.returncode, stdout
 
-    def _create_endpoint(self, assigned_ip):
+    def _create_endpoint(self, ip_list):
         """Creates an endpoint in the Calico datastore with the client.
 
-        :param assigned_ip - IP address that has been already allocated
+        :param ip_list - list of IP addresses that has been already allocated
         :return Calico endpoint object
         """
         _log.debug("Creating Calico endpoint")
@@ -355,7 +371,7 @@ class CniPlugin(object):
             endpoint = self._client.create_endpoint(HOSTNAME,
                                                     ORCHESTRATOR_ID,
                                                     self.container_id,
-                                                    [assigned_ip])
+                                                    ip_list)
         except (AddrFormatError, KeyError), e:
             # AddrFormatError is raised when the IP address used is not
             # compatible with the node.
@@ -368,7 +384,7 @@ class CniPlugin(object):
             self._print_error_response(ERR_CODE_GENERIC, e.message)
             sys.exit(ERR_CODE_GENERIC)
 
-        _log.info("Created Calico endpoint with IP address %s", assigned_ip)
+        _log.info("Created Calico endpoint with IP address(es) %s", ip_list)
         return endpoint
 
     def _remove_endpoint(self):
