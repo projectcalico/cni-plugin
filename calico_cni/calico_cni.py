@@ -193,7 +193,7 @@ class CniPlugin(object):
                   self.container_id)
 
         # Step 1: Assign an IP address using the given IPAM plugin.
-        ipv4, ipv6 = self._assign_ip(self.env)
+        ipv4, ipv6 = self._assign_ips(self.env)
 
         # Step 2: Create the Calico endpoint object.
         endpoint = self._create_endpoint([ipv4, ipv6])
@@ -253,7 +253,7 @@ class CniPlugin(object):
 
         _log.info("Finished removing container: %s", self.container_id)
 
-    def _assign_ip(self, env):
+    def _assign_ips(self, env):
         """Assigns and returns an IPv4 address using the IPAM plugin
         specified in the network config file.
 

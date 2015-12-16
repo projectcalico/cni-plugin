@@ -156,11 +156,11 @@ class CniPluginTest(unittest.TestCase):
 
     @patch("calico_cni.json", autospec=True)
     def test_add_mainline(self, m_json): 
-        # Mock out _assign_ip.
+        # Mock out _assign_ips.
         ip4 = IPNetwork("10.0.0.1/32")
         ip6 = IPNetwork("0:0:0:0:0:ffff:a00:1/128")
-        self.plugin._assign_ip = MagicMock(spec=self.plugin._assign_ip)
-        self.plugin._assign_ip.return_value = ip4, ip6
+        self.plugin._assign_ips = MagicMock(spec=self.plugin._assign_ips)
+        self.plugin._assign_ips.return_value = ip4, ip6
 
         # Mock out IPAM response.
         ipam_response = json.dumps({"ip4": {"ip": str(ip4.cidr)},
@@ -180,7 +180,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin.add()
 
         # Assert.
-        self.plugin._assign_ip.assert_called_once_with(self.plugin.env)
+        self.plugin._assign_ips.assert_called_once_with(self.plugin.env)
         self.plugin._create_endpoint.assert_called_once_with([ip4, ip6])
         self.plugin._provision_veth.assert_called_once_with(endpoint)
         self.plugin.policy_driver.set_profile.assert_called_once_with(endpoint)
@@ -220,8 +220,8 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._call_ipam_plugin.return_value = rc, ipam_result
         env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
 
-        # Call _assign_ip.
-        assigned_ip = self.plugin._assign_ip(env)
+        # Call _assign_ips.
+        assigned_ip = self.plugin._assign_ips(env)
 
         # Assert.
         assert_equal(assigned_ip, (IPNetwork(ip4), IPNetwork(ip6)))
