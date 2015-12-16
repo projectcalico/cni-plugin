@@ -122,7 +122,7 @@ class CniPluginFvTest(unittest.TestCase):
         # Configure.
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
-        ip6 = ""
+        ip6 = "0:0:0:0:0:ffff:a00:1"
         ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
                                   "ip6": {"ip": ip6}})
         self.set_ipam_result(0, ipam_stdout, "")
@@ -141,7 +141,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4)])
+                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert a profile was applied.
         self.client.set_profiles_on_endpoint.assert_called_once_with(
@@ -157,7 +157,7 @@ class CniPluginFvTest(unittest.TestCase):
         self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=default"
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
-        ip6 = ""
+        ip6 = "0:0:0:0:0:ffff:a00:1"
         ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
                                   "ip6": {"ip": ip6}})
         self.set_ipam_result(0, ipam_stdout, "")
@@ -181,7 +181,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4)])
+                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert a profile was applied.
         self.client.set_profiles_on_endpoint.assert_called_once_with(
@@ -197,7 +197,7 @@ class CniPluginFvTest(unittest.TestCase):
         self.cni_args = "K8S_POD_NAME=podname;K8S_POD_NAMESPACE=default"
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
-        ip6 = ""
+        ip6 = "0:0:0:0:0:ffff:a00:1"
         ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
                                   "ip6": {"ip": ip6}})
         self.set_ipam_result(0, ipam_stdout, "")
@@ -303,8 +303,6 @@ class CniPluginFvTest(unittest.TestCase):
         # Assert a profile was not set.
         assert_false(self.client.set_profiles_on_endpoint.called)
 
-
-
     def test_add_error_profile_create(self):
         """
         Tests CNI add, plugin fails to create profile.
@@ -314,8 +312,9 @@ class CniPluginFvTest(unittest.TestCase):
         # Configure.
         self.command = CNI_CMD_ADD
         ip4 = "10.0.0.1/32"
+        ip6 = "0:0:0:0:0:ffff:a00:1"
         ipam_stdout = json.dumps({"ip4": {"ip": ip4}, 
-                                  "ip6": {"ip": ""}})
+                                  "ip6": {"ip": ip6}})
         self.set_ipam_result(0, ipam_stdout, "")
 
         # Create plugin.
@@ -332,7 +331,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4)])
+                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert set_profile called by policy driver.
         self.client.set_profiles_on_endpoint.assert_called_once_with(
