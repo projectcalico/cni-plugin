@@ -62,6 +62,12 @@ class BasePolicyDriver(object):
             rules = self.generate_rules()
             self._client.create_profile(self.profile_name, rules)
 
+        # Check if the profile has already been applied.
+        if self.profile_name in endpoint.profile_ids:
+            _log.warning("Endpoint already in profile %s", 
+                         self.profile_name)
+            return
+
         # Set the default profile on this pod's Calico endpoint.
         _log.info("Appending profile '%s' to endpoint %s",
                   self.profile_name, endpoint.endpoint_id)
