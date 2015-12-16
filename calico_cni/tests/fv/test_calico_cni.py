@@ -16,7 +16,6 @@ import os
 import sys
 import json
 import unittest
-from etcd import EtcdException
 from mock import patch, MagicMock, call, ANY
 from netaddr import IPAddress, IPNetwork
 from subprocess32 import CalledProcessError, Popen, PIPE
@@ -268,7 +267,7 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
@@ -296,7 +295,7 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
@@ -323,13 +322,13 @@ class CniPluginFvTest(unittest.TestCase):
         p = self.create_plugin()
 
         # Configure EtcdException when setting profile.
-        p.policy_driver._client.set_profiles_on_endpoint.side_effect = MagicMock(side_effect=EtcdException)
+        p.policy_driver._client.set_profiles_on_endpoint.side_effect = MagicMock(side_effect=KeyError)
 
         # Execute.
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
