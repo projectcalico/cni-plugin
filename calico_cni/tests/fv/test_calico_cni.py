@@ -130,6 +130,9 @@ class CniPluginFvTest(unittest.TestCase):
         # Create plugin.
         p = self.create_plugin()
 
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
+
         # Execute.
         rc = p.execute()
         
@@ -144,7 +147,7 @@ class CniPluginFvTest(unittest.TestCase):
                 "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert a profile was applied.
-        self.client.set_profiles_on_endpoint.assert_called_once_with(
+        self.client.append_profiles_to_endpoint.assert_called_once_with(
                 profile_names=[self.network_name],
                 endpoint_id=self.client.create_endpoint().endpoint_id
         )
@@ -170,6 +173,9 @@ class CniPluginFvTest(unittest.TestCase):
         p = self.create_plugin()
         assert_true(isinstance(p.container_engine, DockerEngine))
 
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
+
         # Execute.
         rc = p.execute()
         
@@ -184,7 +190,7 @@ class CniPluginFvTest(unittest.TestCase):
                 "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert a profile was applied.
-        self.client.set_profiles_on_endpoint.assert_called_once_with(
+        self.client.append_profiles_to_endpoint.assert_called_once_with(
                 profile_names=["default_profile"],
                 endpoint_id=self.client.create_endpoint().endpoint_id
         )
@@ -244,7 +250,7 @@ class CniPluginFvTest(unittest.TestCase):
         assert_false(self.client.create_endpoint.called) 
 
         # Assert a profile was not set.
-        assert_false(self.client.set_profiles_on_endpoint.called)
+        assert_false(self.client.append_profiles_to_endpoint.called)
 
     def test_add_ipam_error_missing_ip(self):
         """
@@ -263,6 +269,9 @@ class CniPluginFvTest(unittest.TestCase):
         # Create plugin.
         p = self.create_plugin()
 
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
+
         # Execute.
         rc = p.execute()
         
@@ -273,7 +282,7 @@ class CniPluginFvTest(unittest.TestCase):
         assert_false(self.client.create_endpoint.called) 
 
         # Assert a profile was not set.
-        assert_false(self.client.set_profiles_on_endpoint.called)
+        assert_false(self.client.append_profiles_to_endpoint.called)
 
     def test_add_ipam_error_invalid_response(self):
         """
@@ -291,6 +300,9 @@ class CniPluginFvTest(unittest.TestCase):
         # Create plugin.
         p = self.create_plugin()
 
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
+
         # Execute.
         rc = p.execute()
         
@@ -301,7 +313,7 @@ class CniPluginFvTest(unittest.TestCase):
         assert_false(self.client.create_endpoint.called) 
 
         # Assert a profile was not set.
-        assert_false(self.client.set_profiles_on_endpoint.called)
+        assert_false(self.client.append_profiles_to_endpoint.called)
 
     def test_add_error_profile_create(self):
         """
@@ -320,8 +332,11 @@ class CniPluginFvTest(unittest.TestCase):
         # Create plugin.
         p = self.create_plugin()
 
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
+
         # Configure EtcdException when setting profile.
-        p.policy_driver._client.set_profiles_on_endpoint.side_effect = MagicMock(side_effect=KeyError)
+        p.policy_driver._client.append_profiles_to_endpoint.side_effect = MagicMock(side_effect=KeyError)
 
         # Execute.
         rc = p.execute()
@@ -334,7 +349,7 @@ class CniPluginFvTest(unittest.TestCase):
                 "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
 
         # Assert set_profile called by policy driver.
-        self.client.set_profiles_on_endpoint.assert_called_once_with(
+        self.client.append_profiles_to_endpoint.assert_called_once_with(
                 profile_names=[self.network_name],
                 endpoint_id=self.client.create_endpoint().endpoint_id
         )

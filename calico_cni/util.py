@@ -22,7 +22,7 @@ from subprocess32 import check_output
 LOG_FORMAT = "%(asctime)s %(levelname)s %(message)s"
 
 
-def configure_logging(logger, log_filename, log_dir=LOG_DIR, log_level=logging.DEBUG):
+def configure_logging(logger, log_filename, log_level=logging.INFO, log_dir=LOG_DIR):
     """Configures logging for given logger using the given filename.
 
     :return None.
@@ -42,7 +42,7 @@ def configure_logging(logger, log_filename, log_dir=LOG_DIR, log_level=logging.D
 
     # Attach a stderr handler to the log.
     stderr_hdlr = logging.StreamHandler(sys.stderr)
-    stderr_hdlr.setLevel(logging.INFO)
+    stderr_hdlr.setLevel(log_level)
     stderr_hdlr.setFormatter(formatter)
     logger.addHandler(stderr_hdlr)
     

@@ -173,7 +173,7 @@ if __name__ == '__main__':
     env = os.environ.copy()
 
     # Read config file from stdin.
-    _log.info("Reading config from stdin")
+    _log.debug("Reading config from stdin")
     conf_raw = ''.join(sys.stdin.readlines()).replace('\n', '')
     config = json.loads(conf_raw)
 

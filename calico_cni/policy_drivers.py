@@ -47,7 +47,7 @@ class BasePolicyDriver(object):
         of subclass.
         """
 
-    def set_profile(self, endpoint):
+    def apply_profile(self, endpoint):
         """Sets a profile for the networked container on the given endpoint.
 
         Create a profile if it is not yet created.
@@ -62,13 +62,19 @@ class BasePolicyDriver(object):
             rules = self.generate_rules()
             self._client.create_profile(self.profile_name, rules)
 
+        # Check if the profile has already been applied.
+        if self.profile_name in endpoint.profile_ids:
+            _log.warning("Endpoint already in profile %s", 
+                         self.profile_name)
+            return
+
         # Set the default profile on this pod's Calico endpoint.
-        _log.info("Setting profile '%s' on endpoint %s",
+        _log.info("Appending profile '%s' to endpoint %s",
                   self.profile_name, endpoint.endpoint_id)
         try:
-            self._client.set_profiles_on_endpoint(
-                profile_names=[self.profile_name],
-                endpoint_id=endpoint.endpoint_id
+            self._client.append_profiles_to_endpoint(
+                    profile_names=[self.profile_name],
+                    endpoint_id=endpoint.endpoint_id
             )
         except (KeyError, MultipleEndpointsMatch), e:
             _log.exception("Failed to apply profile to endpoint %s: %s",

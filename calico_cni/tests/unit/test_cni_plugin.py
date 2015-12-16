@@ -176,6 +176,10 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._provision_veth = MagicMock(spec=self.plugin._provision_veth)
         self.plugin._provision_veth.return_value = endpoint
 
+        # Mock out _get_endpoint - no endpoint exists.
+        self.plugin._get_endpoint = MagicMock(spec=self.plugin._get_endpoint)
+        self.plugin._get_endpoint.return_value = None
+
         # Call method.
         self.plugin.add()
 
@@ -183,7 +187,7 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._assign_ips.assert_called_once_with(self.plugin.env)
         self.plugin._create_endpoint.assert_called_once_with([ip4, ip6])
         self.plugin._provision_veth.assert_called_once_with(endpoint)
-        self.plugin.policy_driver.set_profile.assert_called_once_with(endpoint)
+        self.plugin.policy_driver.apply_profile.assert_called_once_with(endpoint)
         m_json.dumps.assert_called_once_with(ipam_response)
 
     @patch("calico_cni.netns", autospec=True)
