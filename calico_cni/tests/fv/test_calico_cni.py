@@ -269,6 +269,9 @@ class CniPluginFvTest(unittest.TestCase):
         # Create plugin.
         p = self.create_plugin()
 
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
+
         # Execute.
         rc = p.execute()
         
@@ -296,6 +299,9 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Create plugin.
         p = self.create_plugin()
+
+        # Mock DatastoreClient such that no endpoints exist.
+        self.client.get_endpoint.side_effect = KeyError
 
         # Execute.
         rc = p.execute()
