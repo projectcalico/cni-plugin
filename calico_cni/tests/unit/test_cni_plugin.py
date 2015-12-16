@@ -185,7 +185,7 @@ class CniPluginTest(unittest.TestCase):
 
         # Assert.
         self.plugin._assign_ips.assert_called_once_with(self.plugin.env)
-        self.plugin._create_endpoint.assert_called_once_with([ip4, ip6])
+        self.plugin._create_endpoint.assert_called_once_with([ip4])
         self.plugin._provision_veth.assert_called_once_with(endpoint)
         self.plugin.policy_driver.apply_profile.assert_called_once_with(endpoint)
         m_json.dumps.assert_called_once_with(ipam_response)
@@ -225,10 +225,10 @@ class CniPluginTest(unittest.TestCase):
         env = {CNI_COMMAND_ENV: CNI_CMD_ADD}
 
         # Call _assign_ips.
-        assigned_ip = self.plugin._assign_ips(env)
+        assigned_ips = self.plugin._assign_ips(env)
 
         # Assert.
-        assert_equal(assigned_ip, (IPNetwork(ip4), IPNetwork(ip6)))
+        assert_equal(assigned_ips, (IPNetwork(ip4), IPNetwork(ip6)))
 
     def test_release_ip_mainline(self):
         # Mock _call_ipam_plugin.

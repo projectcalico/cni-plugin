@@ -222,8 +222,9 @@ class CniPlugin(object):
         # Assign IP addresses using the given IPAM plugin.
         ipv4, ipv6 = self._assign_ips(self.env)
 
-        # Create the Calico endpoint object.
-        endpoint = self._create_endpoint([ipv4, ipv6])
+        # Create the Calico endpoint object.  For now, we only 
+        # support creating endpoints with IPv4.
+        endpoint = self._create_endpoint([ipv4])
     
         # Provision the veth for this endpoint.
         endpoint = self._provision_veth(endpoint)
@@ -256,15 +257,18 @@ class CniPlugin(object):
         try:
             ip4 = next(iter(endpoint.ipv4_nets))
         except StopIteration:
-            _log.error("No IPV4 address found on existing endpoint")
-            # TODO - Handle error.
-            sys.exit(1)
+            # No IPv4 address on existing endpoint.
+            _log.error("No IPV4 address attached to existing endpoint")
+            self._print_error_response(ERR_CODE_GENERIC, 
+                    "Cannot add network - no IPv4 address")
+            sys.exit(ERR_CODE_GENERIC)
 
         try:
             ip6 = next(iter(endpoint.ipv6_nets))
         except StopIteration:
-            _log.error("No IPV6 address found on existing endpoint")
-            # TODO - Actually support IPv6 on Endpoints in CNI.
+            # Not all deployments will use IPv6 - don't treat this as an error,
+            # but log a warning and use an null IPv6 address.
+            _log.warning("No IPV6 address attached to existing endpoint")
             ip6 = IPNetwork("::/128")
 
         # Apply a new profile to this endpoint.
@@ -424,10 +428,9 @@ class CniPlugin(object):
                                                     self.container_id,
                                                     ip_list)
         except (AddrFormatError, KeyError), e:
-            # AddrFormatError is raised when the IP address used is not
-            # compatible with the node.
-            # KeyError is raised when BGP config for host is not found.
-            # Release the allocated IP address when this error occurs.
+            # AddrFormatError: Raised when an IP address type is not 
+            #                  compatible with the node.
+            # KeyError: Raised when BGP config for host is not found.
             _log.exception("Failed to create Calico endpoint.")
             env = self.env.copy()
             env[CNI_COMMAND_ENV] = CNI_CMD_DELETE

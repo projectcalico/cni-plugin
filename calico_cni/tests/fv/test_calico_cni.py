@@ -144,7 +144,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
+                "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert a profile was applied.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
@@ -187,7 +187,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
+                "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert a profile was applied.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
@@ -244,7 +244,7 @@ class CniPluginFvTest(unittest.TestCase):
         rc = p.execute()
         
         # Assert failure.
-        assert_equal(rc, 1)
+        assert_equal(rc, ERR_CODE_GENERIC)
 
         # Assert an endpoint was not created.
         assert_false(self.client.create_endpoint.called) 
@@ -346,7 +346,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert an endpoint was created.
         self.client.create_endpoint.assert_called_once_with(ANY, 
-                "cni", self.container_id, [IPNetwork(ip4), IPNetwork(ip6)])
+                "cni", self.container_id, [IPNetwork(ip4)])
 
         # Assert set_profile called by policy driver.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
