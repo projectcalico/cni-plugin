@@ -19,8 +19,6 @@ from pycalico.datastore_datatypes import Rule, Rules
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from pycalico.util import validate_characters
 
-KUBERNETES_DEFAULT_PROFILE = "default_profile"
-
 LOG_FILENAME = "cni.log"
 _log = logging.getLogger(__name__)
 configure_logging(_log, LOG_FILENAME)
@@ -134,28 +132,13 @@ class DefaultPolicyDriver(BasePolicyDriver):
         return None
 
 
-class KubernetesDefaultPolicyDriver(BasePolicyDriver):
+class KubernetesDefaultPolicyDriver(DefaultPolicyDriver):
     """
     Implements default network policy for a Kubernetes container manager.
+
+    The different between this an the DefaultPolicyDriver is that this 
+    engine creates profiles which allow all incoming traffic.
     """
-    def __init__(self):
-        BasePolicyDriver.__init__(self)
-        assert validate_characters(KUBERNETES_DEFAULT_PROFILE)
-        self.profile_name = KUBERNETES_DEFAULT_PROFILE
-
-    def remove_profile(self):
-        """Right now this function is a no-op.
-
-        Need to think more about how to handle the race condition that exists
-        between removing a profile and creating a new one of the same name.
-
-        For now we'll leak profiles in Calico datastore.
-
-        :return: None
-        """
-        _log.info("Not removing profile %s. Clean up manually if desired",
-                  self.profile_name)
-
     def generate_rules(self):
         """Generates default rules for a Kubernetes container manager.
 

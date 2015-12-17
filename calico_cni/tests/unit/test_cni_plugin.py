@@ -70,36 +70,6 @@ class CniPluginTest(unittest.TestCase):
         self.m_datastore_client = MagicMock(spec=DatastoreClient)
         self.plugin._client = self.m_datastore_client
 
-    def test_parse_cni_args_mainline(self):
-        # Call method.
-        cni_args = "ARG1=VAL1;ARG_2=VAL_2;ARG-3=786.3;KEY= VAL;string=This is a string" 
-        parsed = self.plugin.parse_cni_args(cni_args)
-
-        # Assert correctly parsed.
-        assert_equal(parsed["ARG1"], "VAL1")
-        assert_equal(parsed["ARG_2"], "VAL_2")
-        assert_equal(parsed["ARG-3"], "786.3")
-        assert_equal(parsed["KEY"], "VAL")
-        assert_equal(parsed["string"], "This is a string")
-
-    def test_parse_cni_args_invalid(self):
-        # Missing equals sign.
-        parsed = self.plugin.parse_cni_args("INVALID:ARG")
-        assert_equal(parsed, {})
-
-        # Invalid characters.
-        parsed = self.plugin.parse_cni_args("ARG1=ARG2:#1=#2;WHAT=")
-        assert_equal(parsed, {})
-
-    def test_parse_cni_args_empty(self):
-        # Empty string.
-        parsed = self.plugin.parse_cni_args("")
-        assert_equal(parsed, {})
-
-        # Empty string with a single space.
-        parsed = self.plugin.parse_cni_args(" ")
-        assert_equal(parsed, {})
-
     def test_execute_mainline(self):
         # Mock out _execute() for this test.
         self.plugin._execute = MagicMock(spec=self.plugin._execute)

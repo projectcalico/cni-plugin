@@ -191,7 +191,7 @@ class CniPluginFvTest(unittest.TestCase):
 
         # Assert a profile was applied.
         self.client.append_profiles_to_endpoint.assert_called_once_with(
-                profile_names=["default_profile"],
+                profile_names=[self.network_name],
                 endpoint_id=self.client.create_endpoint().endpoint_id
         )
 

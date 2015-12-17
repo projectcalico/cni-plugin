@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import re
 import socket
 
 
@@ -21,6 +22,9 @@ ETCD_AUTHORITY_ENV = 'ETCD_AUTHORITY'
 # System Specific Constants
 ORCHESTRATOR_ID = "cni"
 HOSTNAME = socket.gethostname()
+
+# Regex to parse CNI_ARGS.
+CNI_ARGS_RE = re.compile("([a-zA-Z0-9/\.\-\_ ]+)=([a-zA-Z0-9/\.\-\_ ]+)(?:;|$)")
 
 # Constants for accessing environment variables. The following
 # set of variables are required by the CNI spec.
@@ -37,7 +41,8 @@ CNI_CMD_DELETE = "DEL"
 
 # Kubernetes Constants
 K8S_POD_NAME = "K8S_POD_NAME"
-K8S_NAMESPACE = "K8S_NAMESPACE"
+K8S_POD_NAMESPACE = "K8S_POD_NAMESPACE"
+K8S_POD_INFRA_CONTAINER_ID = "K8S_POD_INFRA_CONTAINER_ID"
 
 # Constants for getting Calico configuration from the network
 # configuration file.
@@ -55,3 +60,5 @@ ERR_CODE_INVALID_ARGUMENT = 103
 
 # Logging Configuration
 LOG_DIR = "/var/log/calico/cni"
+LOG_FORMAT = '%(asctime)s %(process)d [%(identity)s] %(levelname)s %(message)s'
+

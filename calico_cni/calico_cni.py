@@ -16,17 +16,19 @@ from __future__ import print_function
 import logging
 import json
 import os
-import re
 import sys
 
-from subprocess32 import CalledProcessError, Popen, PIPE
+# Use subprocess for Popen due to bug passing env in subprocess32
+from subprocess import Popen 
+from subprocess32 import CalledProcessError, PIPE
+
 from netaddr import IPNetwork, AddrFormatError
 
 from pycalico import netns
 from pycalico.netns import Namespace, remove_veth
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_errors import MultipleEndpointsMatch
-from util import configure_logging
+from util import configure_logging, parse_cni_args
 from constants import *
 
 import policy_drivers
@@ -35,9 +37,6 @@ from container_engines import DefaultEngine, DockerEngine
 # Logging configuration.
 LOG_FILENAME = "cni.log"
 _log = logging.getLogger(__name__)
-
-# Regex to parse CNI_ARGS.
-CNI_ARGS_RE = re.compile("([a-zA-Z0-9/\.\-\_ ]+)=([a-zA-Z0-9/\.\-\_ ]+)(?:;|$)")
 
 
 class CniPlugin(object):
@@ -85,7 +84,7 @@ class CniPlugin(object):
         Name of the interface to create within the container.
         """
 
-        self.cni_args = self.parse_cni_args(env[CNI_ARGS_ENV])
+        self.cni_args = parse_cni_args(env[CNI_ARGS_ENV])
         """
         Dictionary of additional CNI arguments provided via
         the CNI_ARGS environment variable.
@@ -116,25 +115,6 @@ class CniPlugin(object):
         """
         Chooses the correct container engine based on the given configuration.
         """
-
-    def parse_cni_args(self, cni_args):
-        """Parses the given CNI_ARGS string into key value pairs
-        and returns a dictionary containing the arguments.
-
-        e.g "FOO=BAR;ABC=123" -> {"FOO": "BAR", "ABC": "123"}
-
-        :param cni_args
-        :return: args_to_return - dictionary of parsed cni args
-        """
-        # Dictionary to return.
-        args_to_return = {}
-
-        _log.debug("Parsing CNI_ARGS: %s", cni_args)
-        for k,v in CNI_ARGS_RE.findall(cni_args):
-            _log.debug("\tParsed CNI_ARG: %s=%s", k, v)
-            args_to_return[k.strip()] = v.strip()
-        _log.debug("Parsed CNI_ARGS: %s", args_to_return)
-        return args_to_return
 
     def execute(self):
         """Executes this plugin.
@@ -537,7 +517,9 @@ class CniPlugin(object):
                 sys.exit(ERR_CODE_GENERIC)
         else:
             _log.debug("Using Default Kubernetes Policy Driver")
-            driver = policy_drivers.KubernetesDefaultPolicyDriver()
+            driver = policy_drivers.KubernetesDefaultPolicyDriver(
+                    self.network_name
+            )
 
         return driver
 
