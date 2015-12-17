@@ -18,14 +18,11 @@ import json
 import os
 import sys
 
-# Use subprocess for Popen due to bug passing env in subprocess32
-from subprocess import Popen 
-from subprocess32 import CalledProcessError, PIPE
-
+from subprocess import Popen, PIPE 
 from netaddr import IPNetwork, AddrFormatError
 
 from pycalico import netns
-from pycalico.netns import Namespace, remove_veth
+from pycalico.netns import Namespace, remove_veth, CalledProcessError
 from pycalico.datastore import DatastoreClient
 from pycalico.datastore_errors import MultipleEndpointsMatch
 from util import configure_logging, parse_cni_args
