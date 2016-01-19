@@ -15,6 +15,8 @@ Install the CNI plugins:
 sudo mkdir -p /opt/cni/bin/
 sudo wget -N -P /opt/cni/bin/ https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico
 sudo wget -N -P /opt/cni/bin/ https://github.com/projectcalico/calico-cni/releases/download/v0.2.0/calico-ipam
+sudo chmod +x /opt/cni/bin/calico
+sudo chmod +x /opt/cni/bin/calico-ipam
 ```
 
 ### Install Network Configuration Files 
