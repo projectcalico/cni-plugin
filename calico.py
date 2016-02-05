@@ -125,6 +125,15 @@ class CniPlugin(object):
         Path in which to search for CNI plugins.
         """
 
+        if self.k8s_namespace and self.k8s_pod_name:
+            self.workload_id = "%s.%s" % (self.k8s_namespace, self.k8s_pod_name)
+        else:
+            self.workload_id = self.container_id
+        """
+        Identifier for the workload.  In Kubernetes, this is the
+        pod's namespace and name.  Otherwise, this is the container ID.
+        """
+
     def execute(self):
         """
         Execute the CNI plugin - uses the given CNI_COMMAND to determine 
@@ -420,11 +429,12 @@ class CniPlugin(object):
         :param ip_list - list of IP addresses that have been already allocated
         :return Calico endpoint object
         """
-        _log.debug("Creating Calico endpoint")
+        _log.debug("Creating Calico endpoint with workload_id=%s", 
+                   self.workload_id)
         try:
             endpoint = self._client.create_endpoint(HOSTNAME,
                                                     ORCHESTRATOR_ID,
-                                                    self.container_id,
+                                                    self.workload_id,
                                                     ip_list)
         except (AddrFormatError, KeyError) as e:
             # AddrFormatError: Raised when an IP address type is not 
@@ -450,7 +460,7 @@ class CniPlugin(object):
                     self.container_id)
             self._client.remove_workload(hostname=HOSTNAME,
                                          orchestrator_id=ORCHESTRATOR_ID,
-                                         workload_id=self.container_id)
+                                         workload_id=self.workload_id)
         except KeyError:
             _log.warning("Unable to remove workload with ID %s from datastore.",
                          self.container_id)
@@ -514,14 +524,14 @@ class CniPlugin(object):
             endpoint = self._client.get_endpoint(
                 hostname=HOSTNAME,
                 orchestrator_id=ORCHESTRATOR_ID,
-                workload_id=self.container_id
+                workload_id=self.workload_id
             )
         except KeyError:
-            _log.debug("No endpoint found matching ID %s", self.container_id)
+            _log.debug("No endpoint found matching ID %s", self.workload_id)
             endpoint = None
         except MultipleEndpointsMatch:
             message = "Multiple Endpoints found matching ID %s" % \
-                    self.container_id
+                    self.workload_id
             print_cni_error(ERR_CODE_GENERIC, message)
             sys.exit(ERR_CODE_GENERIC)
 
