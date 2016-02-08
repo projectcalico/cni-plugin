@@ -127,6 +127,21 @@ class DefaultPolicyDriver(object):
         return []
 
 
+class NullPolicyDriver(DefaultPolicyDriver):
+    """
+    Performs no policy.  When using this driver, no profiles will be 
+    assigned to endpoints.
+    """
+    def __init__(self):
+        _log.debug("Initializing NullPolicyDriver")
+
+    def apply_profile(self, endpoint):
+        _log.info("Null policy driver, do not apply profile")
+
+    def remove_profile(self):
+        _log.info("Null policy driver, do not remove profile")
+
+
 class KubernetesDefaultPolicyDriver(DefaultPolicyDriver):
     """
     Implements default network policy for a Kubernetes container manager.
@@ -326,7 +341,11 @@ def get_policy_driver(k8s_pod_name, k8s_namespace, net_config):
     policy_type = policy_config.get("type")
 
     # Determine which policy driver to use.
-    if k8s_pod_name:
+    if policy_type == POLICY_MODE_NONE:
+        # Use the null driver. 
+        driver_cls = NullPolicyDriver 
+        driver_args = []
+    elif k8s_pod_name:
         # Runing under Kubernetes - decide which Kubernetes driver to use.
         if policy_type == POLICY_MODE_ANNOTATIONS: 
             _log.debug("Using Kubernetes Annotation Policy Driver")
