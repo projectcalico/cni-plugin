@@ -129,14 +129,17 @@ class DefaultPolicyDriver(object):
 
 class NullPolicyDriver(DefaultPolicyDriver):
     """
-    Performs no policy.  When using this driver, no profiles will be 
-    assigned to endpoints.
+    This driver rejects all incoming traffic, but allows all outgoing traffic.
     """
     def __init__(self):
         _log.debug("Initializing NullPolicyDriver")
+        DefaultPolicyDriver.__init__(self, "deny-inbound")
 
-    def apply_profile(self, endpoint):
-        _log.info("Null policy driver, do not apply profile")
+    def generate_rules(self):
+        return Rules(id=self.profile_name,
+                     inbound_rules=[Rule(action="deny")],
+                     outbound_rules=[Rule(action="allow")])
+
 
     def remove_profile(self):
         _log.info("Null policy driver, do not remove profile")
