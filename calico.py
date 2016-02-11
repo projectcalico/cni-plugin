@@ -183,7 +183,7 @@ class CniPlugin(object):
         Handled adding a new container to a Calico network.
         """
         # Assign IP addresses using the given IPAM plugin.
-        ipv4, ipv6, ipam_result = self._assign_ips(self.ipam_env)
+        ipv4, ipam_result = self._assign_ips(self.ipam_env)
 
         # Create the Calico endpoint object.  For now, we only 
         # support creating endpoints with IPv4.
@@ -280,7 +280,8 @@ class CniPlugin(object):
         """Assigns and returns an IPv4 address using the IPAM plugin
         specified in the network config file.
 
-        :return: ipv4, ipv6 - The IP addresses assigned by the IPAM plugin.
+        :return: ipv4 - The IP address assigned by the IPAM plugin.
+                 ipam_result - The json response from the IPAM plugin.
         """
         # Call the IPAM plugin.  Returns the plugin returncode,
         # as well as the CNI result from stdout.
@@ -321,21 +322,9 @@ class CniPlugin(object):
             print_cni_error(ERR_CODE_GENERIC, message)
             sys.exit(ERR_CODE_GENERIC)
 
-        try:
-            ipv6 = IPNetwork(ipam_result["ip6"]["ip"])
-        except KeyError:
-            message = "IPAM plugin did not return an IPv6 address."
-            print_cni_error(ERR_CODE_GENERIC, message)
-            sys.exit(ERR_CODE_GENERIC)
-        except (AddrFormatError, ValueError):
-            message = "Invalid or Empty IPv6 address: %s" % \
-                      (ipam_result["ip6"]["ip"])
-            print_cni_error(ERR_CODE_GENERIC, message)
-            sys.exit(ERR_CODE_GENERIC)
-
         _log.info("IPAM plugin assigned IPv4 address: %s", ipv4)
-        _log.info("IPAM plugin assigned IPv6 address: %s", ipv6)
-        return ipv4, ipv6, ipam_result
+
+        return ipv4, ipam_result
 
     def _release_ip(self, env):
         """Releases the IP address(es) for this container using the IPAM plugin
