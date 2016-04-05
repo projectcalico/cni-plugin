@@ -1,7 +1,7 @@
 .PHONY: all binary test plugin ipam ut clean update-version
 
 # Version of calico/build to use.
-BUILD_VERSION=latest
+BUILD_VERSION=v0.13.0
 
 SRCFILES=$(shell find calico_cni -type f ! -path calico_cni/version.py) calico.py ipam.py
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
