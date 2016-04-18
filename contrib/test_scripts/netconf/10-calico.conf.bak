@@ -1,0 +1,1 @@
+{name: calico-k8s-network, type: calico, etcd_authority: 10.0.2.15:2379, log_level: info, ipam: {type: calico-ipam}}

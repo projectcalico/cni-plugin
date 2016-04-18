@@ -1,0 +1,16 @@
+{
+  "name": "net1",
+  "type": "./calico",
+  "log_level": "NONE",
+  "log_level_stderr": "debug",
+  "etcd_authority": "1.2.3.4:2379",
+  "etcd_endpoints": "http://127.0.0.1:2379",
+  "ipam": {
+    "type": "host-local",
+    "subnet": "10.0.0.0/8"
+  },
+  "policy": {
+    "type": "k8s",
+    "k8s_api_root": "http://localhost:8080/api/v1"
+  }
+}

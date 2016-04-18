@@ -1,11 +1,6 @@
-build
 dist
-venv
-env
+cni_container.created
 .idea
-*.pyc
 *~
-*.created
-.coverage
-*.spec
-calico_cni/version.py
+vendor
+net.d
