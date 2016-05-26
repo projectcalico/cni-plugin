@@ -53,6 +53,7 @@ LOG_LEVEL_STDERR_KEY = "log_level_stderr"
 POLICY_KEY = "policy"
 ASSIGN_IPV4_KEY = "assign_ipv4"
 ASSIGN_IPV6_KEY = "assign_ipv6"
+LABELS_KEY = "labels"
 
 # Constants for getting policy specific information 
 # from the policy dictionary in the network config file.

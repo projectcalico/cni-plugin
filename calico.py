@@ -75,6 +75,11 @@ class CniPlugin(object):
         Name of Kubernetes namespace if running under Kubernetes, else None.
         """
 
+        self.labels = network_config.get(LABELS_KEY, {})
+        """
+        Label data to assign to this endpoint.
+        """
+
         self.network_config = network_config
         """
         Network config as provided in the CNI network file passed in
@@ -503,6 +508,10 @@ class CniPlugin(object):
             self._release_ip(self.ipam_env)
             print_cni_error(ERR_CODE_GENERIC, e.message)
             sys.exit(ERR_CODE_GENERIC)
+
+        # Assign labels to the new endpoint object
+        _log.debug("Setting Labels: %s", self.labels)
+        endpoint.labels = self.labels
 
         _log.info("Created Calico endpoint with IP address(es) %s", ip_list)
         return endpoint
