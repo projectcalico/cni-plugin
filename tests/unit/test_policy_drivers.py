@@ -26,6 +26,7 @@ from calico_cni.policy_drivers import (ApplyProfileError,
                                        get_policy_driver,
                                        PolicyException,
                                        DefaultPolicyDriver,
+                                       MesosPolicyDriver,
                                        KubernetesNoPolicyDriver,
                                        KubernetesAnnotationDriver,
                                        KubernetesPolicyDriver)
@@ -99,6 +100,47 @@ class DefaultPolicyDriverTest(unittest.TestCase):
         assert_raises(ValueError, DefaultPolicyDriver, net_name)
 
 
+class MesosPolicyDriverTest(unittest.TestCase):
+    def setUp(self):
+        self.network_name = "test_net_name"
+        self.network_args = {
+          "org.apache.mesos" : {
+            "network_info" : {
+              "name" : "test_net_name",
+              "labels" : {
+                "labels" : [
+                  { "key" : "app", "value" : "myapp" },
+                  { "key" : "env", "value" : "prod" }
+                ]
+              }
+            }
+          }
+        }
+
+        # The init function for Mesos Policy driver will convert these
+        # to a standard dictionary.
+        self.expected_labels = {"app":"myapp", "env":"prod"}
+
+        self.driver = MesosPolicyDriver(self.network_name, self.network_args)
+        assert_equal(self.driver.profile_name, self.network_name)
+        assert_equal(self.driver.labels, self.expected_labels)
+
+        # Mock the datastore client
+        self.client = MagicMock(spec=DatastoreClient)
+        self.driver._client = self.client
+
+    @patch("calico_cni.policy_drivers.DefaultPolicyDriver.apply_profile")
+    def test_apply_profile(self, m_default_apply_profile):
+        endpoint = MagicMock(spec=Endpoint)
+        endpoint.endpoint_id = "12345"
+
+        # Mock default profile call
+        self.driver.apply_profile(endpoint)
+
+        m_default_apply_profile.assert_called_once()
+        self.assertEqual(endpoint.labels, self.expected_labels)
+
+
 class KubernetesDefaultPolicyDriverTest(unittest.TestCase):
     """
     Test class for KubernetesDefaultPolicyDriver class.
@@ -121,6 +163,7 @@ class KubernetesDefaultPolicyDriverTest(unittest.TestCase):
                          inbound_rules=[Rule(action="allow")],
                          outbound_rules=[Rule(action="allow")])
         assert_equal(rules, expected)
+
 
 class KubernetesAnnotationDriverTest(unittest.TestCase):
     """
@@ -422,6 +465,7 @@ class KubernetesAnnotationDriverTest(unittest.TestCase):
         # Should be None
         assert_equal(annotations, None)
 
+
 class KubernetesPolicyDriverTest(unittest.TestCase):
     """
     Test class for DefaultDenyInboundDriver class.
@@ -467,6 +511,7 @@ class GetPolicyDriverTest(unittest.TestCase):
         cni_plugin.k8s_pod_name = "podname"
         cni_plugin.k8s_namespace = "namespace"
         cni_plugin.running_under_k8s = True
+        cni_plugin.running_under_mesos = False
         driver = get_policy_driver(cni_plugin)
         assert_true(isinstance(driver, KubernetesNoPolicyDriver))
 
@@ -477,6 +522,7 @@ class GetPolicyDriverTest(unittest.TestCase):
         cni_plugin.k8s_pod_name = "podname"
         cni_plugin.k8s_namespace = "namespace"
         cni_plugin.running_under_k8s = True
+        cni_plugin.running_under_mesos = False
         driver = get_policy_driver(cni_plugin)
         assert_true(isinstance(driver, KubernetesAnnotationDriver))
 
@@ -486,6 +532,7 @@ class GetPolicyDriverTest(unittest.TestCase):
         cni_plugin.k8s_pod_name = "podname"
         cni_plugin.k8s_namespace = "namespace"
         cni_plugin.running_under_k8s = True
+        cni_plugin.running_under_mesos = False
         driver = get_policy_driver(cni_plugin)
         assert_true(isinstance(driver, KubernetesPolicyDriver))
 
@@ -503,6 +550,7 @@ class GetPolicyDriverTest(unittest.TestCase):
         cni_plugin = Mock(spec=CniPlugin)
         cni_plugin.network_config = config
         cni_plugin.running_under_k8s = True
+        cni_plugin.running_under_mesos = False
         cni_plugin.k8s_pod_name = "podname"
         cni_plugin.k8s_namespace = "namespace"
         with assert_raises(SystemExit) as err:
@@ -517,10 +565,24 @@ class GetPolicyDriverTest(unittest.TestCase):
         cni_plugin = Mock(spec=CniPlugin)
         cni_plugin.network_config = {"name": "testnetwork"}
         cni_plugin.running_under_k8s = False
+        cni_plugin.running_under_mesos = False
 
         # Call
         with assert_raises(SystemExit) as err:
             get_policy_driver(cni_plugin)
         e = err.exception
         assert_equal(e.code, ERR_CODE_GENERIC)
+
+    def test_get_policy_driver_mesos(self):
+        cni_plugin = Mock(spec=CniPlugin)
+        cni_plugin.network_config = {"name": "testnetwork",
+                                     "policy":{"type": "k8s"},
+                                     "args": {
+                                         "org.apache.mesos": {}
+                                       }
+                                     }
+        cni_plugin.running_under_k8s = False
+        cni_plugin.running_under_mesos = True
+        driver = get_policy_driver(cni_plugin)
+        assert_true(isinstance(driver, MesosPolicyDriver))
 

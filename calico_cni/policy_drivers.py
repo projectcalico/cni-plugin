@@ -131,13 +131,55 @@ class DefaultPolicyDriver(object):
         """
         return []
 
+class MesosPolicyDriver(DefaultPolicyDriver):
+    """
+    Implements default network policy for a Mesos container manager.
+    """
+    def __init__(self, network_name, network_args):
+        """
+        Extract any labels that have been specified in the mesos-namespaced labels field
+        of the network_args. Mesos CNI inserts the following additional data into
+        the args field:
+        "args" : {
+          "org.apache.mesos" : {
+            "network_info" : {
+              "name" : "mynet",
+              "labels" : {
+                "labels" : [
+                  { "key" : "app", "value" : "myapp" },
+                  { "key" : "env", "value" : "prod" }
+                ]
+              }
+            }
+          }
+        }
+        Note that Mesos labels are a list of {"key": <key>, "value": <value>}, so pull
+        the key and values and populate the labels dictionary.
+        """
+        self.labels = {}
+
+        labels_list = network_args[MESOS_NS_KEY]. \
+            get(MESOS_NETWORK_INFO_KEY, {}). \
+            get(MESOS_LABELS_OUTER_KEY, {}). \
+            get(MESOS_LABELS_KEY, [])
+
+        for label in labels_list:
+            self.labels[label["key"]] = label["value"]
+
+        DefaultPolicyDriver.__init__(self, network_name)
+
+    def apply_profile(self, endpoint):
+        endpoint.labels = self.labels
+        self._client.update_endpoint(endpoint)
+        DefaultPolicyDriver.apply_profile(self, endpoint)
+
 
 class KubernetesNoPolicyDriver(DefaultPolicyDriver):
     """
     Implements default network policy for a Kubernetes container manager.
 
-    The different between this an the DefaultPolicyDriver is that this
-    engine creates profiles which allow all incoming traffic.
+    Unlike the DefaultPolicyDriver, this engine creates profiles
+    which allow _all_ incoming traffic.
     """
     def generate_rules(self):
         """Generates default rules for a Kubernetes container manager.
@@ -399,6 +441,7 @@ def get_policy_driver(cni_plugin):
     # Extract policy config and network name.
     policy_config = cni_plugin.network_config.get(POLICY_KEY, {})
     network_name = cni_plugin.network_config["name"]
+    network_args = cni_plugin.network_config.get(ARGS_KEY, {})
     policy_type = policy_config.get("type")
     k8s_config = cni_plugin.network_config.get("kubernetes", {})
     supported_policy_types = [None,
@@ -452,6 +495,10 @@ def get_policy_driver(cni_plugin):
             _log.debug("Using Kubernetes Driver - no policy")
             driver_cls = KubernetesNoPolicyDriver
             driver_args = [network_name]
+    elif cni_plugin.running_under_mesos:
+        _log.debug("Using Mesos Policy Driver")
+        driver_cls = MesosPolicyDriver
+        driver_args = [network_name, network_args]
     else:
         _log.debug("Using default policy driver")
         driver_cls = DefaultPolicyDriver

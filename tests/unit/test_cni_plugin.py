@@ -52,18 +52,6 @@ class CniPluginTest(unittest.TestCase):
                 "routes": [{"dst": "0.0.0.0/0"}],
                 "range-start": "",
                 "range-end": ""
-            },
-            "args" : {
-                "org.apache.mesos" : {
-                    "network_info" : {
-                        "name" : "mynet",
-                        "labels" : {
-                            "labels" : [
-                                { "key" : "group", "value" : "production" },
-                            ]
-                        },
-                    },
-                },
             }
         }
         self.env = {
@@ -555,7 +543,6 @@ class CniPluginTest(unittest.TestCase):
         self.plugin._client.create_endpoint.assert_called_once_with(ANY,
                 self.expected_orch_id, self.expected_workload_id, ip_list)
         assert_equal(ep, endpoint)
-        self.assertEqual(ep.labels, {"group": "production"})
 
     def test_create_endpoint_error(self):
         # Mock.
