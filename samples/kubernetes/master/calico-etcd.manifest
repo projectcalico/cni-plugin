@@ -2,7 +2,7 @@ apiVersion: v1
 kind: Pod
 metadata:
   name: calico-etcd
-  namespace: calico-system
+  namespace: kube-system
 spec:
     hostNetwork: true
     containers:
@@ -17,10 +17,6 @@ spec:
         - "--listen-peer-urls=http://0.0.0.0:6660"
       securityContext:
         privileged: true
-      ports:
-      - name: clientport
-        containerPort: 6666
-        hostPort: 6666
       volumeMounts:
         - mountPath: /var/etcd
           name: varetcd

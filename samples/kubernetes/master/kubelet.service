@@ -6,7 +6,9 @@ After=docker.service
 
 [Service]
 ExecStart=/usr/bin/kubelet \
---register-node=false \
+--api-servers=http://127.0.0.1:8080 \
+--register-node=true \
+--register-schedulable=false \
 --allow-privileged=true \
 --config=/etc/kubernetes/manifests \
 --cluster-dns=10.100.0.10 \
