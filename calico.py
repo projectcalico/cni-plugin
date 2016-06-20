@@ -116,8 +116,10 @@ class CniPlugin(object):
         # Note that Mesos labels are a list of {"key": <key>, "value": <value>}, so pull
         # the key and values and populate the labels dictionary.
         if MESOS_NS in network_config:
-            labels_list = network_config[MESOS_NS].get(MESOS_NETWORK_INFO, {}). \
-                          get(MESOS_LABELS_OUTER, {}).get(MESOS_LABELS, [])
+            labels_list = network_config[MESOS_NS].    \
+                          get(MESOS_NETWORK_INFO, {}). \
+                          get(MESOS_LABELS_OUTER, {}). \
+                          get(MESOS_LABELS, [])
             for label in labels_list:
                 self.labels[label["key"]] = label["value"]
 
