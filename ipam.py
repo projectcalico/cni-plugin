@@ -22,7 +22,7 @@ from netaddr import IPNetwork, IPAddress, AddrFormatError
 from pycalico.block import AlreadyAssignedError
 
 from pycalico.ipam import IPAMClient
-from calico_cni import __version__, __commit__, __branch__
+from calico_cni.version import __version__, __commit__, __branch__
 from calico_cni.util import (CniError, parse_cni_args,
                              configure_logging, print_cni_error)
 from calico_cni.constants import *

@@ -29,7 +29,7 @@ from pycalico.datastore import (DatastoreClient, ETCD_AUTHORITY_ENV,
                                 ETCD_ENDPOINTS_ENV)
 from pycalico.datastore_errors import MultipleEndpointsMatch
 
-from calico_cni import __version__, __commit__, __branch__
+from calico_cni.version import __version__, __commit__, __branch__
 from calico_cni.util import (configure_logging, parse_cni_args, print_cni_error,
                   handle_datastore_error, CniError)
 
