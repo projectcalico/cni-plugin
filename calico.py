@@ -112,14 +112,17 @@ class CniPlugin(object):
         dependent.
         """
 
+        self.args = network_config.get(ARGS_KEY, {})
+
         # If there Mesos namespaced data, extract any labels that have been specified.
         # Note that Mesos labels are a list of {"key": <key>, "value": <value>}, so pull
         # the key and values and populate the labels dictionary.
-        if MESOS_NS in network_config:
-            labels_list = network_config[MESOS_NS].    \
-                          get(MESOS_NETWORK_INFO, {}). \
-                          get(MESOS_LABELS_OUTER, {}). \
-                          get(MESOS_LABELS, [])
+        if MESOS_NS_KEY in self.args:
+            _log.info("Extracting Mesos namespaced data")
+            labels_list = self.args[MESOS_NS_KEY].    \
+                          get(MESOS_NETWORK_INFO_KEY, {}). \
+                          get(MESOS_LABELS_OUTER_KEY, {}). \
+                          get(MESOS_LABELS_KEY, [])
             for label in labels_list:
                 self.labels[label["key"]] = label["value"]
 
