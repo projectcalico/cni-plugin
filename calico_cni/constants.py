@@ -53,6 +53,7 @@ LOG_LEVEL_STDERR_KEY = "log_level_stderr"
 POLICY_KEY = "policy"
 ASSIGN_IPV4_KEY = "assign_ipv4"
 ASSIGN_IPV6_KEY = "assign_ipv6"
+ARGS_KEY = "args"
 
 # Constants for getting policy specific information
 # from the policy dictionary in the network config file.
@@ -70,3 +71,22 @@ POLICY_MODE_KUBERNETES = "k8s"
 LOG_DIR = "/var/log/calico/cni"
 LOG_FORMAT = '%(asctime)s %(process)d [%(identity)s] %(levelname)s %(message)s'
 
+# Mesos namespaced data.  Mesos CNI inserts the following additional data into
+# the args field:
+#     "args" : {
+#       "org.apache.mesos" : {
+#         "network_info" : {
+#           "name" : "mynet",
+#           "labels" : {
+#             "labels" : [
+#               { "key" : "app", "value" : "myapp" },
+#               { "key" : "env", "value" : "prod" }
+#             ]
+#           }
+#         }
+#       }
+#     }
+MESOS_NS_KEY = "org.apache.mesos"
+MESOS_NETWORK_INFO_KEY = "network_info"
+MESOS_LABELS_OUTER_KEY = "labels"
+MESOS_LABELS_KEY = "labels"

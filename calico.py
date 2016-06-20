@@ -110,6 +110,26 @@ class CniPlugin(object):
         Environment dictionary used when calling the IPAM plugin.
         """
 
+        self.labels = {}
+        """
+        Label data to assign to this endpoint.  The origin of the labels is orchestrator
+        dependent.
+        """
+
+        self.args = network_config.get(ARGS_KEY, {})
+
+        # If there Mesos namespaced data, extract any labels that have been specified.
+        # Note that Mesos labels are a list of {"key": <key>, "value": <value>}, so pull
+        # the key and values and populate the labels dictionary.
+        if MESOS_NS_KEY in self.args:
+            _log.info("Extracting Mesos namespaced data")
+            labels_list = self.args[MESOS_NS_KEY].    \
+                          get(MESOS_NETWORK_INFO_KEY, {}). \
+                          get(MESOS_LABELS_OUTER_KEY, {}). \
+                          get(MESOS_LABELS_KEY, [])
+            for label in labels_list:
+                self.labels[label["key"]] = label["value"]
+
         self.command = env[CNI_COMMAND_ENV]
         assert self.command in [CNI_CMD_DELETE, CNI_CMD_ADD], \
                 "Invalid CNI command %s" % self.command
@@ -567,6 +587,10 @@ class CniPlugin(object):
             self._release_ip(self.ipam_env)
             print_cni_error(ERR_CODE_GENERIC, e.message)
             sys.exit(ERR_CODE_GENERIC)
+
+        # Assign labels to the new endpoint object
+        _log.debug("Setting Labels: %s", self.labels)
+        endpoint.labels = self.labels
 
         _log.info("Created Calico endpoint with IP address(es) %s", ip_list)
         return endpoint
