@@ -39,7 +39,7 @@ from calico_cni.policy_drivers import ApplyProfileError, get_policy_driver
 from ipam import IpamPlugin
 
 # Logging configuration.
-_log = logging.getLogger("calico_cni")l
+_log = logging.getLogger("calico_cni")
 
 __doc__ = """
 Usage: calico [-vh]
