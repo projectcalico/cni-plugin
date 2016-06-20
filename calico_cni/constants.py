@@ -71,3 +71,22 @@ POLICY_MODE_KUBERNETES = "k8s"
 LOG_DIR = "/var/log/calico/cni"
 LOG_FORMAT = '%(asctime)s %(process)d [%(identity)s] %(levelname)s %(message)s'
 
+# Mesos namespaced data.  Mesos CNI inserts the following additional data into
+# the args field:
+#     "args" : {
+#       "org.apache.mesos" : {
+#         "network_info" : {
+#           "name" : "mynet",
+#           "labels" : {
+#             "labels" : [
+#               { "key" : "app", "value" : "myapp" },
+#               { "key" : "env", "value" : "prod" }
+#             ]
+#           }
+#         }
+#       }
+#     }
+MESOS_NS = "org.apache.mesos"
+MESOS_NETWORK_INFO = "network_info"
+MESOS_LABELS_OUTER = "labels"
+MESOS_LABELS = "labels"

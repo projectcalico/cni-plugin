@@ -39,7 +39,7 @@ from calico_cni.policy_drivers import ApplyProfileError, get_policy_driver
 from ipam import IpamPlugin
 
 # Logging configuration.
-_log = logging.getLogger("calico_cni")
+_log = logging.getLogger("calico_cni")l
 
 __doc__ = """
 Usage: calico [-vh]
@@ -75,11 +75,6 @@ class CniPlugin(object):
         Name of Kubernetes namespace if running under Kubernetes, else None.
         """
 
-        self.labels = network_config.get(LABELS_KEY, {})
-        """
-        Label data to assign to this endpoint.
-        """
-
         self.network_config = network_config
         """
         Network config as provided in the CNI network file passed in
@@ -110,6 +105,21 @@ class CniPlugin(object):
         """
         Environment dictionary used when calling the IPAM plugin.
         """
+
+        self.labels = {}
+        """
+        Label data to assign to this endpoint.  The origin of the labels is orchestrator
+        dependent.
+        """
+
+        # If there Mesos namespaced data, extract any labels that have been specified.
+        # Note that Mesos labels are a list of {"key": <key>, "value": <value>}, so pull
+        # the key and values and populate the labels dictionary.
+        if MESOS_NS in network_config:
+            labels_list = network_config[MESOS_NS].get(MESOS_NETWORK_INFO, {}). \
+                          get(MESOS_LABELS_OUTER, {}).get(MESOS_LABELS, [])
+            for label in labels_list:
+                self.labels[label["key"]] = label["value"]
 
         self.command = env[CNI_COMMAND_ENV]
         assert self.command in [CNI_CMD_DELETE, CNI_CMD_ADD], \
