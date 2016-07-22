@@ -15,13 +15,14 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"runtime"
 
 	"github.com/vishvananda/netlink"
 
-	"flag"
+	"net"
 
 	"github.com/containernetworking/cni/pkg/ip"
 	"github.com/containernetworking/cni/pkg/ipam"
@@ -30,7 +31,9 @@ import (
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/k8s"
 	. "github.com/projectcalico/calico-cni/utils"
-	"github.com/projectcalico/libcalico/lib"
+	"github.com/satori/go.uuid"
+	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/common"
 )
 
 var hostname string
@@ -45,28 +48,10 @@ func init() {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-	if err := AddIgnoreUnknownArgs(); err != nil {
-		return err
-	}
-
 	// Unmarshall the network config, and perform validation
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
-	}
-
-	// Allow the hostname to be overridden by the network config
-	if conf.Hostname != "" {
-		hostname = conf.Hostname
-	}
-
-	if err := ValidateNetworkName(conf.Name); err != nil {
-		return err
-	}
-
-	etcd, err := libcalico.GetKeysAPI(conf.EtcdAuthority, conf.EtcdEndpoints)
-	if err != nil {
-		return err
 	}
 
 	workloadID, orchestratorID, err := GetIdentifiers(args)
@@ -74,15 +59,25 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return err
 	}
 
-	// Always check if there's an existing endpoint.
-	endpoint, err := libcalico.GetEndpoint(
-		etcd, libcalico.Workload{
-			Hostname:       hostname,
-			OrchestratorID: orchestratorID,
-			WorkloadID:     workloadID})
-
+	// Allow the hostname to be overridden by the network config
+	if conf.Hostname != "" {
+		hostname = conf.Hostname
+	}
+	calicoClient, err := CreateClient(conf)
 	if err != nil {
 		return err
+	}
+	// Always check if there's an existing endpoint.
+	endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{
+		Hostname:       hostname,
+		OrchestratorID: orchestratorID,
+		WorkloadID:     workloadID})
+	if err != nil {
+		return err
+	}
+	var endpoint *api.WorkloadEndpoint
+	if len(endpoints.Items) == 1 {
+		endpoint = &endpoints.Items[0]
 	}
 
 	fmt.Fprintf(os.Stderr, "Calico CNI checking for existing endpoint: %v\n", endpoint)
@@ -94,7 +89,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	// If running under Kubernetes then branch off into the kubernetes code, otherwise handle everything in this
 	// function.
 	if orchestratorID == "k8s" {
-		if result, err = k8s.CmdAddK8s(args, conf, hostname, etcd, endpoint); err != nil {
+		if result, err = k8s.CmdAddK8s(args, conf, hostname, calicoClient, endpoint); err != nil {
 			return err
 		}
 	} else {
@@ -109,7 +104,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Just update the profile on the endpoint. The profile will be created if needed during the
 			// profile processing step.
 			fmt.Fprintf(os.Stderr, "Calico CNI appending profile: %s\n", profileID)
-			endpoint.ProfileIDs = append(endpoint.ProfileIDs, profileID)
+			endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
 			result, err = CreateResultFromEndpoint(endpoint)
 			if err != nil {
 				return err
@@ -127,25 +122,36 @@ func cmdAdd(args *skel.CmdArgs) error {
 			}
 
 			// 2) Create the endpoint object
-			endpoint = &libcalico.Endpoint{ProfileIDs: []string{profileID}, OrchestratorID: orchestratorID,
-				WorkloadID: workloadID, Hostname: hostname, State: "active"}
+			endpoint = api.NewWorkloadEndpoint()
+			endpoint.Metadata.Hostname = hostname
+			endpoint.Metadata.OrchestratorID = orchestratorID
+			endpoint.Metadata.WorkloadID = workloadID
+			endpoint.Metadata.Name = fmt.Sprintf("%x", uuid.NewV1())
+			endpoint.Spec.Profiles = []string{profileID}
+
 			if err = PopulateEndpointNets(endpoint, result); err != nil {
 				return err
 			}
 
-			fmt.Fprintf(os.Stderr, "Calico CNI using IPv4=%s IPv6=%s\n", endpoint.IPv4Nets, endpoint.IPv6Nets)
+			fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
 			// 3) Set up the veth
 			hostVethName, contVethMac, err := DoNetworking(args, conf, result)
 			if err != nil {
 				return err
 			}
-			endpoint.Mac = contVethMac
-			endpoint.Name = hostVethName
+
+			mac, err := net.ParseMAC(contVethMac)
+			if err != nil {
+				return err
+			}
+
+			endpoint.Spec.MAC = common.MAC{mac}
+			endpoint.Spec.InterfaceName = hostVethName
 		}
 
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
-		if err := endpoint.Write(etcd); err != nil {
+		if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
 			return err
 		}
 	}
@@ -154,9 +160,15 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if conf.Policy.PolicyType == "" {
 		// Start by checking if the profile already exists. If it already exists then there is no work to do.
 		// The CNI plugin never updates a profile.
-		exists, err := libcalico.ProfileExists(conf.Name, etcd)
+		exists := true
+		_, err = calicoClient.Profiles().Get(api.ProfileMetadata{Name: conf.Name})
 		if err != nil {
-			return err
+			_, ok := err.(common.ErrorResourceDoesNotExist)
+			if ok {
+				exists = false
+			} else {
+				return err
+			}
 		}
 
 		if !exists {
@@ -164,20 +176,20 @@ func cmdAdd(args *skel.CmdArgs) error {
 			// Under k8s (without full policy support) the rule is permissive and allows all traffic.
 			// Otherwise, incoming traffic is only allowed from profiles with the same tag.
 			fmt.Fprintf(os.Stderr, "Calico CNI creating profile: %s\n", conf.Name)
-			var inboundRules []libcalico.Rule
+			var inboundRules []api.Rule
 			if orchestratorID == "k8s" {
-				inboundRules = []libcalico.Rule{{Action: "allow"}}
+				inboundRules = []api.Rule{{Action: "allow"}}
 			} else {
-				inboundRules = []libcalico.Rule{{Action: "allow", SrcTag: conf.Name}}
+				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Tag: conf.Name}}}
 			}
 
-			profile := libcalico.Profile{
-				ID: conf.Name,
-				Rules: libcalico.Rules{
-					Inbound:  inboundRules,
-					Outbound: []libcalico.Rule{{Action: "allow"}}},
-				Tags: []string{conf.Name}}
-			if err := profile.Write(etcd); err != nil {
+			profile := api.NewProfile()
+			profile.Metadata.Name = conf.Name
+			profile.Spec.Tags = []string{conf.Name}
+			profile.Spec.EgressRules = []api.Rule{{Action: "allow"}}
+			profile.Spec.IngressRules = inboundRules
+
+			if _, err := calicoClient.Profiles().Create(profile); err != nil {
 				return err
 			}
 		}
@@ -187,18 +199,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 }
 
 func cmdDel(args *skel.CmdArgs) error {
-	if err := AddIgnoreUnknownArgs(); err != nil {
-		return err
-	}
-
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
-	}
-
-	// Allow the hostname to be overridden by the network config.
-	if conf.Hostname != "" {
-		hostname = conf.Hostname
 	}
 
 	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.
@@ -210,17 +213,20 @@ func cmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 
-	etcd, err := libcalico.GetKeysAPI(conf.EtcdAuthority, conf.EtcdEndpoints)
+	// Allow the hostname to be overridden by the network config
+	if conf.Hostname != "" {
+		hostname = conf.Hostname
+	}
+
+	calicoClient, err := CreateClient(conf)
 	if err != nil {
 		return err
 	}
 
-	workload := libcalico.Workload{
+	if err := calicoClient.WorkloadEndpoints().Delete(api.WorkloadEndpointMetadata{
 		Hostname:       hostname,
 		OrchestratorID: orchestratorID,
-		WorkloadID:     workloadID}
-
-	if err := workload.Delete(etcd); err != nil {
+		WorkloadID:     workloadID}); err != nil {
 		return err
 	}
 
@@ -245,8 +251,8 @@ func cmdDel(args *skel.CmdArgs) error {
 var VERSION string
 
 func main() {
-	// Display the version on "-v", otherwise just delagate to the skel code.
-	// Use a new flag set so as not to conflict with existing libaries which use "flag"
+	// Display the version on "-v", otherwise just delegate to the skel code.
+	// Use a new flag set so as not to conflict with existing libraries which use "flag"
 	flagSet := flag.NewFlagSet("Calico", flag.ExitOnError)
 
 	version := flagSet.Bool("v", false, "Display version")
@@ -259,5 +265,10 @@ func main() {
 		fmt.Println(VERSION)
 		os.Exit(0)
 	}
+
+	if err := AddIgnoreUnknownArgs(); err != nil {
+		os.Exit(1)
+	}
+
 	skel.PluginMain(cmdAdd, cmdDel)
 }

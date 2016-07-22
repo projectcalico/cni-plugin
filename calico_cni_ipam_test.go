@@ -17,8 +17,8 @@ var _ = Describe("Calico IPAM Tests", func() {
 		Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 rm /calico --recursive | true", os.Getenv("ETCD_IP")))
 
 		// TODO - remove - Workaround libcalico bug
-		Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 mkdir /calico/ipam/v2/host/xeon/ipv6/block", os.Getenv("ETCD_IP")))
-		Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 mkdir /calico/ipam/v2/host/xeon/ipv4/block", os.Getenv("ETCD_IP")))
+		//Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 mkdir /calico/ipam/v2/host/xeon/ipv6/block", os.Getenv("ETCD_IP")))
+		//Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 mkdir /calico/ipam/v2/host/xeon/ipv4/block", os.Getenv("ETCD_IP")))
 
 		PreCreatePool("192.168.0.0/16")
 		PreCreatePool("fd80:24e2:f998:72d6::/64")

@@ -2,18 +2,20 @@ package k8s
 
 import (
 	"fmt"
+	"net"
 
 	"os"
 
 	"github.com/containernetworking/cni/pkg/ipam"
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/coreos/etcd/client"
 	"github.com/projectcalico/calico-cni/utils"
-	"github.com/projectcalico/libcalico/lib"
+	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/common"
 
 	"encoding/json"
 
+	"github.com/tigera/libcalico-go/lib/client"
 	k8sclient "k8s.io/kubernetes/pkg/client/unversioned"
 	"k8s.io/kubernetes/pkg/client/unversioned/clientcmd"
 )
@@ -21,7 +23,7 @@ import (
 // CmdAddK8s performs the "ADD" operation on a kubernetes pod
 // Having kubernetes code in its own file avoids polluting the mainline code. It's expected that the kubernetes case will
 // more special casing than the mainline code.
-func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, etcd client.KeysAPI, endpoint *libcalico.Endpoint) (*types.Result, error) {
+func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoClient *client.Client, endpoint *api.WorkloadEndpoint) (*types.Result, error) {
 	var err error
 	var result *types.Result
 
@@ -80,8 +82,12 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, etcd cli
 		}
 
 		// Create the endpoint object and configure it
-		endpoint = &libcalico.Endpoint{ProfileIDs: []string{profileID}, OrchestratorID: orchestratorID,
-			WorkloadID: workloadID, Hostname: hostname, State: "active"}
+		endpoint := api.NewWorkloadEndpoint()
+		endpoint.Metadata.Hostname = hostname
+		endpoint.Metadata.OrchestratorID = orchestratorID
+		endpoint.Metadata.WorkloadID = workloadID
+		endpoint.Spec.Profiles = []string{profileID}
+
 		if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
 			return nil, err
 		}
@@ -90,9 +96,10 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, etcd cli
 		if err != nil {
 			return nil, err
 		}
-		endpoint.Labels = labels
 
-		fmt.Fprintf(os.Stderr, "Calico CNI using IPv4=%s IPv6=%s\n", endpoint.IPv4Nets, endpoint.IPv6Nets)
+		endpoint.Metadata.Labels = labels
+
+		fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 	}
 
 	// Whether the endpoint existed or not, the veth needs (re)creating.
@@ -100,11 +107,16 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, etcd cli
 	if err != nil {
 		return nil, err
 	}
-	endpoint.Mac = contVethMac
-	endpoint.Name = hostVethName
+
+	mac, err := net.ParseMAC(contVethMac)
+	if err != nil {
+		return nil, err
+	}
+	endpoint.Spec.MAC = common.MAC{mac}
+	endpoint.Spec.InterfaceName = hostVethName
 
 	// Write the endpoint object (either the newly created one, or the updated one)
-	if err := endpoint.Write(etcd); err != nil {
+	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
 		return nil, err
 	}
 

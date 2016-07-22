@@ -9,7 +9,9 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
-	"github.com/projectcalico/libcalico/lib"
+	"github.com/tigera/libcalico-go/lib/api"
+	"github.com/tigera/libcalico-go/lib/client"
+	"github.com/tigera/libcalico-go/lib/common"
 )
 
 func min(a, b int) int {
@@ -42,22 +44,20 @@ func AddIgnoreUnknownArgs() error {
 	return os.Setenv("CNI_ARGS", cniArgs)
 }
 
-func CreateResultFromEndpoint(ep *libcalico.Endpoint) (*types.Result, error) {
+func CreateResultFromEndpoint(ep *api.WorkloadEndpoint) (*types.Result, error) {
 	result := &types.Result{}
 
-	for _, v := range [][]string{ep.IPv4Nets, ep.IPv6Nets} {
-		if len(v) > 0 {
-			unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v[0])
-			parsedIP := types.IPConfig{}
-			if err := parsedIP.UnmarshalJSON([]byte(unparsedIP)); err != nil {
-				return nil, err
-			}
+	for _, v := range ep.Spec.IPNetworks {
+		unparsedIP := fmt.Sprintf(`{"ip": "%s"}`, v)
+		parsedIP := types.IPConfig{}
+		if err := parsedIP.UnmarshalJSON([]byte(unparsedIP)); err != nil {
+			return nil, err
+		}
 
-			if len(parsedIP.IP.IP) == net.IPv4len {
-				result.IP4 = &parsedIP
-			} else {
-				result.IP6 = &parsedIP
-			}
+		if len(v.IP) == net.IPv4len {
+			result.IP4 = &parsedIP
+		} else {
+			result.IP6 = &parsedIP
 		}
 	}
 
@@ -67,11 +67,8 @@ func CreateResultFromEndpoint(ep *libcalico.Endpoint) (*types.Result, error) {
 func GetIdentifiers(args *skel.CmdArgs) (workloadID string, orchestratorID string, err error) {
 	// Determine if running under k8s by checking the CNI args
 	k8sArgs := K8sArgs{}
-	if args.Args != "" {
-		err := types.LoadArgs(args.Args, &k8sArgs)
-		if err != nil {
-			return workloadID, orchestratorID, err
-		}
+	if err = types.LoadArgs(args.Args, &k8sArgs); err != nil {
+		return workloadID, orchestratorID, err
 	}
 
 	if string(k8sArgs.K8S_POD_NAMESPACE) != "" && string(k8sArgs.K8S_POD_NAME) != "" {
@@ -84,23 +81,44 @@ func GetIdentifiers(args *skel.CmdArgs) (workloadID string, orchestratorID strin
 	return workloadID, orchestratorID, nil
 }
 
-func PopulateEndpointNets(endpoint *libcalico.Endpoint, result *types.Result) error {
+func PopulateEndpointNets(endpoint *api.WorkloadEndpoint, result *types.Result) error {
 	if result.IP4 == nil && result.IP6 == nil {
 		return errors.New("IPAM plugin did not return any IP addresses")
 	}
 
 	if result.IP4 != nil {
 		result.IP4.IP.Mask = net.CIDRMask(32, 32)
-		endpoint.IPv4Nets = []string{result.IP4.IP.String()}
-	} else {
-		endpoint.IPv4Nets = []string{}
+		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, common.IPNet{result.IP4.IP})
 	}
 
 	if result.IP6 != nil {
 		result.IP6.IP.Mask = net.CIDRMask(128, 128)
-		endpoint.IPv6Nets = []string{result.IP6.IP.String()}
-	} else {
-		endpoint.IPv6Nets = []string{}
+		endpoint.Spec.IPNetworks = append(endpoint.Spec.IPNetworks, common.IPNet{result.IP6.IP})
 	}
+
 	return nil
+}
+
+func CreateClient(conf NetConf) (*client.Client, error) {
+	if err := ValidateNetworkName(conf.Name); err != nil {
+		return nil, err
+	}
+
+	clientConfig, err := client.LoadClientConfig(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if conf.EtcdAuthority != "" {
+		clientConfig.EtcdAuthority = conf.EtcdAuthority
+	}
+	if conf.EtcdEndpoints != "" {
+		clientConfig.EtcdEndpoints = conf.EtcdEndpoints
+	}
+
+	calicoClient, err := client.New(clientConfig)
+	if err != nil {
+		return nil, err
+	}
+	return calicoClient, nil
 }
