@@ -16,10 +16,6 @@ var _ = Describe("Calico IPAM Tests", func() {
 	BeforeEach(func() {
 		Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 rm /calico --recursive | true", os.Getenv("ETCD_IP")))
 
-		// TODO - remove - Workaround libcalico bug
-		//Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 mkdir /calico/ipam/v2/host/xeon/ipv6/block", os.Getenv("ETCD_IP")))
-		//Cmd(fmt.Sprintf("etcdctl --endpoints http://%s:2379 mkdir /calico/ipam/v2/host/xeon/ipv4/block", os.Getenv("ETCD_IP")))
-
 		PreCreatePool("192.168.0.0/16")
 		PreCreatePool("fd80:24e2:f998:72d6::/64")
 	})
@@ -31,32 +27,16 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 					result, _ := RunIPAMPlugin(netconf, "ADD", "")
 
-					//var firstIPv4, firstIPv6 string
-
 					if expectedIPv4 {
-						//firstIPv4 = result.IP4.IP.IP.String()
 						Expect(result.IP4.IP.Mask.String()).Should(Equal("ffffffff"))
 					}
 
 					if expectedIPv6 {
-						//firstIPv6 = result.IP6.IP.IP.String()
 						Expect(result.IP6.IP.Mask.String()).Should(Equal("ffffffffffffffffffffffffffffffff"))
 					}
 
 					// I can't find any testable side effects for this
 					_, _ = RunIPAMPlugin(netconf, "DEL", "")
-					//// Check that delete works by assigning the IP again and making sure it's the same.
-					//// This assumes of course that IPs are assigned deterministically.
-					//result = RunIPAMPlugin(netconf, "ADD", "")
-					//
-					//if expectedIPv4 {
-					//	Expect(result.IP4.IP.IP.String()).Should(Equal(firstIPv4))
-					//}
-					//
-					//if expectedIPv6 {
-					//	Expect(result.IP4.IP.IP.String()).Should(Equal(firstIPv6))
-					//}
-
 				},
 				Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
 			{
@@ -112,7 +92,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 					    "type": "%s"
 					  }
 					}`, os.Getenv("ETCD_IP"), plugin)
-		PContext("Pass explicit IP address", func() {
+		Context("Pass explicit IP address", func() {
 			It("Return the expected IP", func() {
 				result, _ := RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123")
 				Expect(result.IP4.IP.String()).Should(Equal("192.168.123.123/32"))

@@ -15,12 +15,18 @@ import (
 )
 
 func main() {
+	//flag.Set("logtostderr", "true")
+	//flag.Set("v", "10")
+	//flag.Set("stderrthreshold", "10")
+	//flag.Parse()
+	//glog.Info("Logging configured")
+
 	skel.PluginMain(cmdAdd, cmdDel)
 }
 
 type ipamArgs struct {
 	types.CommonArgs
-	IP *net.IP `json:"ip,omitempty"`
+	IP net.IP `json:"ip,omitempty"`
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -49,13 +55,13 @@ func cmdAdd(args *skel.CmdArgs) error {
 		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request IP: %v\n", ipamArgs.IP)
 
 		// The hostname will be defaulted to the actual hostname if cong.Hostname is empty
-		assignArgs := client.AssignIPArgs{IP: common.IP{*ipamArgs.IP}, HandleID: &workloadID, Hostname: &conf.Hostname}
+		assignArgs := client.AssignIPArgs{IP: common.IP{ipamArgs.IP}, HandleID: &workloadID, Hostname: &conf.Hostname}
 		err := calicoClient.IPAM().AssignIP(assignArgs)
 		if err != nil {
 			return err
 		}
 
-		ipV4Network := net.IPNet{IP: *ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
+		ipV4Network := net.IPNet{IP: ipamArgs.IP, Mask: net.CIDRMask(32, 32)}
 		r.IP4 = &types.IPConfig{IP: ipV4Network}
 	} else {
 		// Default to assigning an IPv4 address
@@ -70,8 +76,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 			num6 = 1
 		}
 
+		fmt.Fprintf(os.Stderr, "Calico CNI IPAM request count IPv4=%d IPv6=%d\n", num4, num6)
+
 		assignArgs := client.AutoAssignArgs{Num4: num4, Num6: num6, HandleID: &args.ContainerID, Hostname: &conf.Hostname}
 		assignedV4, assignedV6, err := calicoClient.IPAM().AutoAssign(assignArgs)
+		fmt.Fprintf(os.Stderr, "Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v\n", assignedV4, assignedV6)
 		if err != nil {
 			return err
 		}

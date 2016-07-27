@@ -1,6 +1,6 @@
 {
     "name": "net1",
-    "type": "/home/gulfstream/go/src/github.com/appc/cni/bin/ptp",
+    "type": "ptp",
     "ipam": {
         "type": "host-local",
         "subnet": "10.0.0.0/8"

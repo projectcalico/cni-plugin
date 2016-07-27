@@ -1,4 +1,5 @@
-SRCFILES=$(wildcard *.go) $(wildcard utils/*.go) $(wildcard test_utils/*.go) ipam/calico-ipam.go
+SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) ipam/calico-ipam.go
+TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
 K8S_VERSION=1.3.1
@@ -21,12 +22,8 @@ ipam: dist/calico-ipam
 clean:
 	rm -rf dist vendor
 
-# Updates all the vendored libraries, i.e. changes the contents of the glide.lock. Running this should NOT be a common operation.
-.PHONY: vendor-up
-vendor-up:
-	glide up -strip-vcs -strip-vendor --update-vendored --all-dependencies --cache
-
-# Use this to populate the vendor directory after checking out the repository
+# Use this to populate the vendor directory after checking out the repository.
+# To update upstream dependencies, delete the glide.lock file first.
 vendor:
 	glide install -strip-vcs -strip-vendor --cache
 
@@ -37,7 +34,7 @@ dist/calico: $(SRCFILES) vendor
 
 # Build the Calico ipam plugin
 dist/calico-ipam: $(SRCFILES) vendor
-	CGO_ENABLED=0 go build -o dist/calico-ipam  \
+	CGO_ENABLED=0 go build -v -o dist/calico-ipam  \
 	-ldflags "-X main.VERSION=$(shell git describe --tags --dirty)" ipam/calico-ipam.go;
 
 .PHONY: test
@@ -50,7 +47,6 @@ test: dist/calico dist/calico-ipam run-etcd
 test-watch: dist/calico dist/calico-ipam
 	# The tests need to run as root
 	sudo CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch
-
 
 $(BUILD_CONTAINER_MARKER): Dockerfile.build
 	docker build -f Dockerfile.build -t $(BUILD_CONTAINER_NAME) .
@@ -107,6 +103,9 @@ static-checks: vendor
 	-golint calico.go
 	-golint utils
 	-golint ipam
+
+install:
+	CGO_ENABLED=0 go install github.com/projectcalico/calico-cni
 
 # Retrieve a host-local plugin for use in the tests
 dist/host-local:

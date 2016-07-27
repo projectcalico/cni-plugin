@@ -1,5 +1,5 @@
-hash: eff9d0a5ac3eac233994c8a7403eed3b4690724b4ae3e59f7acc3edb8c88fbd2
-updated: 2016-07-25T10:36:00.377506736-07:00
+hash: 948daa21c3ba00b20f0d2b84d6a2e875a1c86af74c795b248d2a13fe82549109
+updated: 2016-07-27T17:10:03.5001474-07:00
 imports:
 - name: github.com/beorn7/perks
   version: 3ac7bf7a47d159a033b107610db8a1b6575507a4
@@ -10,7 +10,7 @@ imports:
 - name: github.com/cloudfoundry-incubator/candiedyaml
   version: 99c3df83b51532e3615f851d8c2dbb638f5313bf
 - name: github.com/containernetworking/cni
-  version: 39a8fe476638e5ff315bb879e498c46ff842f242
+  version: c1ff202179dc15839825bed39e59d40b1c08a469
   subpackages:
   - pkg/ip
   - pkg/ipam
@@ -19,13 +19,12 @@ imports:
   - pkg/types
   - pkg/invoke
 - name: github.com/coreos/etcd
-  version: 24a90baff8dd153a8481876fb27db64d7ec7e3c7
+  version: 8b320e7c550067b1dfb37bd1682e8067023e0751
   subpackages:
   - client
   - pkg/transport
   - pkg/pathutil
   - pkg/types
-  - pkg/fileutil
   - pkg/tlsutil
 - name: github.com/coreos/go-iptables
   version: fbb73372b87f6e89951c2b6b31470c2c9d5cfae3
@@ -240,12 +239,12 @@ imports:
   - model
 - name: github.com/prometheus/procfs
   version: 490cc6eb5fa45bf8a8b7b73c8bc82a8160e8531d
+- name: github.com/satori/go.uuid
+  version: 0aa62d5ddceb50dbcb909d790b5345affd3669b6
 - name: github.com/spf13/pflag
   version: 08b1a584251b5b62f458943640fc8ebd4d50aaa5
 - name: github.com/tigera/libcalico-go
-  version: 438f7989f04f0756ebcd405ae49b6d7f5c8e305c
-  repo: git@github.com:robbrockbank/libcalico-go.git
-  vcs: git
+  version: 9c44de6afea1c783930caab1f60e30466b12297c
   subpackages:
   - lib/api
   - lib/common

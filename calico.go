@@ -146,10 +146,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 
-			endpoint.Spec.MAC = common.MAC{mac}
+			endpoint.Spec.MAC = common.MAC{HardwareAddr: mac}
 			endpoint.Spec.InterfaceName = hostVethName
 		}
 
+		fmt.Fprintf(os.Stderr, "ep %+v\n", endpoint)
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
 		if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
 			return err

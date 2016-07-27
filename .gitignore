@@ -1,6 +1,10 @@
 dist
 cni_container.created
+kubeconfig
 .idea
 *~
 vendor
 net.d
+addstats
+delstats
+*.pyc
