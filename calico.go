@@ -54,6 +54,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 		return fmt.Errorf("failed to load netconf: %v", err)
 	}
 
+	if conf.Debug {
+		EnableDebugLogging()
+	}
+
 	workloadID, orchestratorID, err := GetIdentifiers(args)
 	if err != nil {
 		return err
@@ -150,7 +154,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			endpoint.Spec.InterfaceName = hostVethName
 		}
 
-		fmt.Fprintf(os.Stderr, "ep %+v\n", endpoint)
 		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
 		if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
 			return err
@@ -203,6 +206,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	conf := NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if conf.Debug {
+		EnableDebugLogging()
 	}
 
 	// Always try to release the address. Don't deal with any errors till the endpoints are cleaned up.

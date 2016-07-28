@@ -24,7 +24,18 @@ Specify the location of your etcd cluster using either
 If both are set then `etcd_endpoints` is used.
 
 ### Logging
-* Logging is always to `stderr` is and is not currently configurable
+* Logging is always to `stderr`
+* Additional logging can be enabled by setting `"debug"` to `true` in the netconf, e.g.
+```json
+{
+    "name": "any_name",
+    "type": "calico",
+    "debug": true,
+    "ipam": {
+        "type": "calico-ipam"
+    }
+}
+```
 
 ### IPAM
 When using Calico IPAM, the following flags determine what IP addresses should be assigned.

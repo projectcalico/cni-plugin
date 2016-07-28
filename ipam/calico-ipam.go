@@ -15,12 +15,6 @@ import (
 )
 
 func main() {
-	//flag.Set("logtostderr", "true")
-	//flag.Set("v", "10")
-	//flag.Set("stderrthreshold", "10")
-	//flag.Parse()
-	//glog.Info("Logging configured")
-
 	skel.PluginMain(cmdAdd, cmdDel)
 }
 
@@ -33,6 +27,10 @@ func cmdAdd(args *skel.CmdArgs) error {
 	conf := utils.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if conf.Debug {
+		utils.EnableDebugLogging()
 	}
 
 	calicoClient, err := utils.CreateClient(conf)
@@ -103,6 +101,10 @@ func cmdDel(args *skel.CmdArgs) error {
 	conf := utils.NetConf{}
 	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
 		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	if conf.Debug {
+		utils.EnableDebugLogging()
 	}
 
 	calicoClient, err := utils.CreateClient(conf)

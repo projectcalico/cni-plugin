@@ -2,6 +2,7 @@ package utils
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
+	"github.com/golang/glog"
 	"github.com/tigera/libcalico-go/lib/api"
 	"github.com/tigera/libcalico-go/lib/client"
 	"github.com/tigera/libcalico-go/lib/common"
@@ -121,4 +123,12 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 		return nil, err
 	}
 	return calicoClient, nil
+}
+
+func EnableDebugLogging() {
+	flag.Set("logtostderr", "true")
+	flag.Set("v", "10")
+	flag.Set("stderrthreshold", "10")
+	flag.Parse()
+	glog.Info("Calico CNI debug logging configured")
 }
