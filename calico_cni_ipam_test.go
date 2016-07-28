@@ -57,7 +57,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 			    "assign_ipv4": "true"
 			  }
 			}`, os.Getenv("ETCD_IP"), plugin)),
-				PEntry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
+				Entry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
 			{
 			  "name": "net1",
 			  "type": "calico",
@@ -68,7 +68,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 			    "assign_ipv6": "true"
 			  }
 			}`, os.Getenv("ETCD_IP"), plugin)),
-				PEntry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
+				Entry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
 			{
 			  "name": "net1",
 			  "type": "calico",
