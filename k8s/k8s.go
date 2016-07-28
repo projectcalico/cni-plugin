@@ -82,7 +82,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		}
 
 		// Create the endpoint object and configure it
-		endpoint := api.NewWorkloadEndpoint()
+		endpoint = api.NewWorkloadEndpoint()
 		endpoint.Metadata.Hostname = hostname
 		endpoint.Metadata.OrchestratorID = orchestratorID
 		endpoint.Metadata.WorkloadID = workloadID
@@ -112,7 +112,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	if err != nil {
 		return nil, err
 	}
-	endpoint.Spec.MAC = common.MAC{mac}
+	endpoint.Spec.MAC = common.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
 
 	// Write the endpoint object (either the newly created one, or the updated one)

@@ -134,7 +134,8 @@ deploy-rkt: dist/calico
 run-kubernetes-master: stop-kubernetes-master run-etcd binary dist/calicoctl
 	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
 	mkdir -p net.d
-	echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "podCidr"}}' >net.d/10-calico.conf
+	#echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "podCidr"}}' >net.d/10-calico.conf
+	echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "10.101.0.0/16"}}' >net.d/10-calico.conf
 	# Run the kubelet which will launch the master components in a pod.
 	docker run \
 		--volume=/:/rootfs:ro \
