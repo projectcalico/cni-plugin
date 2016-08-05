@@ -10,7 +10,6 @@ import (
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/projectcalico/calico-cni/utils"
-	"github.com/satori/go.uuid"
 	"github.com/tigera/libcalico-go/lib/api"
 	cnet "github.com/tigera/libcalico-go/lib/net"
 
@@ -87,7 +86,6 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Metadata.Hostname = hostname
 		endpoint.Metadata.OrchestratorID = orchestratorID
 		endpoint.Metadata.WorkloadID = workloadID
-		endpoint.Metadata.Name = fmt.Sprintf("%x", uuid.NewV1())
 		endpoint.Spec.Profiles = []string{profileID}
 
 		if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
@@ -116,6 +114,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	}
 	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
+	endpoint.Metadata.Name = args.IfName
 
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := calicoClient.WorkloadEndpoints().Apply(endpoint); err != nil {
