@@ -144,6 +144,17 @@ class CniPlugin(object):
         Path in which to search for CNI plugins.
         """
 
+        self.running_under_mesos = bool(self.network_config.get("args", {}). \
+                                        get(MESOS_NS_KEY))
+        """
+        Flag indicating if this plugin is being executed by mesos. Mesos injects "args"
+        into the network config before passing it to the CNI plugin. Those args will
+        contain a mesos namespaced field. If that field exists, this must be mesos.
+
+        Note: Mesos does not yet inject this information during network deletion. Fortunately,
+        we don't perform mesos-specific logic during deletion.
+        """
+
         self.running_under_k8s = self.k8s_namespace and self.k8s_pod_name
         if self.running_under_k8s:
             self.workload_id = "%s.%s" % (self.k8s_namespace, self.k8s_pod_name)
