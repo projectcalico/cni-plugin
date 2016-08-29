@@ -83,7 +83,7 @@ func setupContainerNetworking(netns, ifName string, mtu int, res *types.Result) 
 
 			_, defNet, _ := net.ParseCIDR("::/0")
 			if err = ip.AddRoute(defNet, hostIPv6Addr, contVeth); err != nil {
-				return fmt.Errorf("failed to add route %v", err)
+				return fmt.Errorf("failed to add default gateway to %v %v", hostIPv6Addr, err)
 			}
 
 			if err = netlink.AddrAdd(contVeth, &netlink.Addr{IPNet: &res.IP6.IP}); err != nil {
