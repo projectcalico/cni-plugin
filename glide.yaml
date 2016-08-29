@@ -1,6 +1,9 @@
 package: github.com/projectcalico/calico-cni
 import:
 - package: github.com/containernetworking/cni
+  version: SetupVeth
+  repo: git@github.com:tomdee/cni.git
+  vcs: git
   subpackages:
   - pkg/ip
   - pkg/ipam
