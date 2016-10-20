@@ -104,7 +104,7 @@ imports:
 - name: github.com/pborman/uuid
   version: 3d4f2ba23642d3cfd06bd4b54cf03d99d95c0f1b
 - name: github.com/projectcalico/libcalico-go
-  version: 4d86b6458df42f96e0ac15f6a4130884376d6f02
+  version: d6ce86635949b276b53b325faf791e98b9b1643a
   subpackages:
   - lib/api
   - lib/api/unversioned
