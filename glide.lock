@@ -15,7 +15,7 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: a47797fdf1d3087a9b31b206771d8fa91f27f92f
+  version: 8e5f34fd97c03025c531fa547e654838ca490f04
   subpackages:
   - client
   - pkg/fileutil
@@ -104,7 +104,7 @@ imports:
 - name: github.com/pborman/uuid
   version: 3d4f2ba23642d3cfd06bd4b54cf03d99d95c0f1b
 - name: github.com/projectcalico/libcalico-go
-  version: 4d86b6458df42f96e0ac15f6a4130884376d6f02
+  version: d872ffdef5ec285a04ad5cca5f77ee329a669736
   subpackages:
   - lib/api
   - lib/api/unversioned
