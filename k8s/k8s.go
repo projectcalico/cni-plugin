@@ -149,7 +149,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 		return nil, err
 	}
-	endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
+	endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
 	endpoint.Spec.InterfaceName = hostVethName
 	logger.WithField("endpoint", endpoint).Info("Added Mac and interface name to endpoint")
 

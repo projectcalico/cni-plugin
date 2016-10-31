@@ -184,7 +184,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 
-			endpoint.Spec.MAC = cnet.MAC{HardwareAddr: mac}
+			endpoint.Spec.MAC = &cnet.MAC{HardwareAddr: mac}
 			endpoint.Spec.InterfaceName = hostVethName
 		}
 
