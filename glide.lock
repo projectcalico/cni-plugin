@@ -1,5 +1,5 @@
-hash: a77685cf87f1a61704adfb459b39811c30585c8348787f30f91f1d4a869614b3
-updated: 2016-11-02T13:05:55.342531065-07:00
+hash: 01f28b36a17a299088adb8003525cd3bb0ee1895410b76d18c6e2b99008bf9fc
+updated: 2016-11-04T11:48:19.212965774-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -68,7 +68,7 @@ imports:
   - log
   - swagger
 - name: github.com/ghodss/yaml
-  version: bea76d6a4713e18b7f5321a2b020738552def3ea
+  version: 73d445a93680fa1a78ae23a5839bad48f32ba1ee
 - name: github.com/go-openapi/jsonpointer
   version: 46af16f9f7b149af66e5d1bd010e3574dc06de98
 - name: github.com/go-openapi/jsonreference
@@ -167,7 +167,7 @@ imports:
 - name: github.com/pborman/uuid
   version: ca53cad383cad2479bbba7f7a1a05797ec1386e4
 - name: github.com/projectcalico/libcalico-go
-  version: 5ac7c81b9a1b422fbc0f6762cd139a7cf324f4f2
+  version: 2ae440e73785b27eeee2888ecaf772237f8ea41f
   subpackages:
   - lib/api
   - lib/api/unversioned
