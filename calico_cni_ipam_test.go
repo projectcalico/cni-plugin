@@ -83,6 +83,87 @@ var _ = Describe("Calico IPAM Tests", func() {
 		})
 	})
 
+	Describe("Run IPAM plugin - Verify IP Pools", func() {
+		Context("Pass valid pools", func() {
+			It("successfully networks the namespace", func() {
+				netconf := fmt.Sprintf(`
+			        {
+			          "name": "net1",
+			          "type": "calico",
+			          "etcd_endpoints": "http://%s:2379",
+			          "ipam": {
+			            "type": "%s",
+			            "assign_ipv4": "true",
+						"ipv4_pools": [ "192.168.0.0/16" ]
+			          }
+			        }`, os.Getenv("ETCD_IP"), plugin)
+				_, _, _, _, _, _, err := CreateContainer(netconf)
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("Pass more than one pool", func() {
+			It("successfully networks the namespace", func() {
+				PreCreatePool("192.169.1.0/24")
+				netconf := fmt.Sprintf(`
+			        {
+			          "name": "net1",
+			          "type": "calico",
+			          "etcd_endpoints": "http://%s:2379",
+			          "ipam": {
+			            "type": "%s",
+			            "assign_ipv4": "true",
+						"ipv4_pools": [ "192.169.1.0/24", "192.168.0.0/16" ]
+			          }
+			        }`, os.Getenv("ETCD_IP"), plugin)
+				_, _, session, _, _, _, err := CreateContainer(netconf)
+				if err != nil {
+					fmt.Printf("Session Err: %v\n", string(session.Err.Contents()))
+				}
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		Context("Pass an invalid pool", func() {
+			It("fails to network the namespace", func() {
+				// Put the bogus pool last in the array
+				netconf := fmt.Sprintf(`
+			        {
+			          "name": "net1",
+			          "type": "calico",
+			          "etcd_endpoints": "http://%s:2379",
+			          "ipam": {
+			            "type": "%s",
+			            "assign_ipv4": "true",
+						"ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
+			          }
+			        }`, os.Getenv("ETCD_IP"), plugin)
+				_, _, session, _, _, _, err := CreateContainer(netconf)
+				Expect(err).Should(HaveOccurred())
+				Expect(session.Err.Contents()).Should(ContainSubstring("192.169.1.0/24) does not exist"))
+			})
+
+			It("fails to network the namespace", func() {
+				// Put the bogus pool first in the array
+				netconf := fmt.Sprintf(`
+			        {
+			          "name": "net1",
+			          "type": "calico",
+			          "etcd_endpoints": "http://%s:2379",
+			          "ipam": {
+			            "type": "%s",
+			            "assign_ipv4": "true",
+						"ipv4_pools": [ "192.169.1.0/24", "192.168.0.0/16" ]
+			          }
+			        }`, os.Getenv("ETCD_IP"), plugin)
+				_, _, session, _, _, _, err := CreateContainer(netconf)
+				Expect(err).Should(HaveOccurred())
+				Expect(session.Err.Contents()).Should(ContainSubstring("192.169.1.0/24) does not exist"))
+			})
+		})
+
+	})
+
 	Describe("Run IPAM plugin", func() {
 		netconf := fmt.Sprintf(`
 					{"name": "net1",
