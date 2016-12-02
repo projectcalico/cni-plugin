@@ -2,8 +2,27 @@ SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) ipam/calico-ipam.
 TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)
 LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
+###############################################################################
+# Common build variables
+# Path to the sources.
+# Default value: directory with Makefile
+SOURCE_DIR?=$(dir $(lastword $(MAKEFILE_LIST)))
+SOURCE_DIR:=$(abspath $(SOURCE_DIR))
+
+# Figure out the users UID/GID.  These are needed to run docker containers
+# as the current user and ensure that files built inside containers are
+# owned by the current user.
+MY_UID:=$(shell id -u)
+MY_GID:=$(shell id -g)
+
+# Pre-configured docker run command that runs as this user with the repo
+# checked out to /code, uses the --rm flag to avoid leaving the container
+# around afterwards.
+DOCKER_RUN_RM:=docker run --rm --user $(MY_UID):$(MY_GID)
+DOCKER_RUN_RM_ROOT:=docker run --rm
 # fail if unable to download
 CURL=curl -sSf
+###############################################################################
 
 K8S_VERSION=1.3.1
 CALICO_NODE_VERSION=0.20.0
@@ -14,11 +33,22 @@ CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
 
-GO_CONTAINER_NAME?=dockerepo/glide
 BUILD_CONTAINER_NAME=calico/cni_build_container
 BUILD_CONTAINER_MARKER=cni_build_container.created
 DEPLOY_CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
+###############################################################################
+# build glide related stuff
+###############################################################################
+# Build a docker image used for building our go code into a binary.
+.PHONY: calico-build/golang
+calico-build/golang:
+	cd docker-build-images && docker build \
+		--build-arg=UID=$(MY_UID) \
+		--build-arg=GID=$(MY_GID) \
+		-f golang-build.Dockerfile \
+		-t calico-build/golang .
+###############################################################################
 
 LIBCALICOGO_PATH?=none
 
@@ -55,29 +85,34 @@ endif
 	@echo "docker push quay.io/calico/cni:latest"
 
 
-# Use this to populate the vendor directory after checking out the repository.
-# To update upstream dependencies, delete the glide.lock file first.
-vendor: glide.yaml
-	# To build without Docker just run "glide install -strip-vendor"
+# vendor is a shortcut for force rebuilding the go vendor directory.
+.PHONY: vendor
+vendor vendor/.up-to-date: glide.lock
+	# Make sure the docker image exists.  Since it's a PHONY, we can't add it
+	# as a dependency or this job will run every time.  Docker does its own
+	# freshness checking for us.
+	$(MAKE) calico-build/golang
+	mkdir -p $$HOME/.glide
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
-          EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
+	  EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
-	docker run --rm \
-	-v ${HOME}/.glide:/root/.glide:rw \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
-      --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
-	cd /go/src/github.com/projectcalico/calico-cni && \
-	glide install -strip-vendor && \
-	chown $(shell id -u):$(shell id -u) -R vendor'
+	$(DOCKER_RUN_RM) \
+	    --net=host \
+	    -v $(SOURCE_DIR):/go/src/github.com/projectcalico/calico-cni:rw \
+	    -v ${HOME}/.glide:/.glide:rw $$EXTRA_DOCKER_BIND \
+	    -w /go/src/github.com/projectcalico/calico-cni \
+	    calico-build/golang \
+	    glide install --strip-vendor
+	touch vendor/.up-to-date
 
 # Build the Calico network plugin
-dist/calico: $(SRCFILES) vendor
+dist/calico: $(SRCFILES) vendor/.up-to-date
 	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -o dist/calico \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" calico.go
 
 # Build the Calico ipam plugin
-dist/calico-ipam: $(SRCFILES) vendor
+dist/calico-ipam: $(SRCFILES) vendor/.up-to-date
 	mkdir -p $(@D)
 	CGO_ENABLED=0 go build -v -o dist/calico-ipam  \
 	-ldflags "-X main.VERSION=$(CALICO_CNI_VERSION) -s -w" ipam/calico-ipam.go
@@ -114,24 +149,24 @@ fetch-cni-bins:
 # Run the tests in a container. Useful for CI
 .PHONY: test-containerized
 test-containerized: run-etcd build-containerized
-	docker run --rm --privileged --net=host \
+	$(DOCKER_RUN_RM_ROOT) --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e PLUGIN=calico \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+	-v $(SOURCE_DIR):/go/src/github.com/projectcalico/calico-cni:rw \
 	$(BUILD_CONTAINER_NAME) /bin/sh -e -c \
-        'make dist/host-local dist/calicoctl && ginkgo && chown $(shell id -u):$(shell id -u) -R dist'
+        'make dist/host-local dist/calicoctl && ginkgo && chown $(MY_UID):$(MY_GID) -R dist'
 	make stop-etcd
 
 # Run the build in a container. Useful for CI
 .PHONY: build-containerized
-build-containerized: $(BUILD_CONTAINER_MARKER) vendor
+build-containerized: $(BUILD_CONTAINER_MARKER) vendor/.up-to-date
 	mkdir -p dist
-	docker run --rm \
-	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:ro \
-	-v ${PWD}/dist:/go/src/github.com/projectcalico/calico-cni/dist \
+	$(DOCKER_RUN_RM_ROOT) \
+	-v $(SOURCE_DIR):/go/src/github.com/projectcalico/calico-cni:ro \
+	-v $(SOURCE_DIR)/dist:/go/src/github.com/projectcalico/calico-cni/dist \
 	$(BUILD_CONTAINER_NAME) bash -c '\
 		make binary && \
-		chown -R $(shell id -u):$(shell id -u) dist'
+		chown -R $(MY_UID):$(MY_GID) dist'
 
 # Etcd is used by the tests
 run-etcd: stop-etcd
@@ -163,7 +198,7 @@ update-tools:
 
 # Perform static checks on the code. The golint checks are allowed to fail, the others must pass.
 .PHONY: static-checks
-static-checks: vendor
+static-checks: vendor/.up-to-date
 	# Format the code and clean up imports
 	goimports -w *.go utils/*.go ipam/*.go test_utils/*.go
 
@@ -177,9 +212,9 @@ static-checks: vendor
 	-golint ipam
 
 
-static-checks-containerized: vendor $(BUILD_CONTAINER_MARKER)
-	docker run --rm \
-        -v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
+static-checks-containerized: vendor/.up-to-date $(BUILD_CONTAINER_MARKER)
+	$(DOCKER_RUN_RM_ROOT) \
+        -v $(SOURCE_DIR):/go/src/github.com/projectcalico/calico-cni:rw \
         --entrypoint /bin/sh $(BUILD_CONTAINER_NAME) -e -c ' \
         cd /go/src/github.com/projectcalico/calico-cni && \
         make update-tools static-checks'
@@ -239,8 +274,8 @@ run-kubernetes-master: stop-kubernetes-master run-etcd-host binary dist/calicoct
 		--volume=/sys:/sys:ro \
 		--volume=/var/lib/docker/:/var/lib/docker:rw \
 		--volume=/var/lib/kubelet/:/var/lib/kubelet:rw \
-		--volume=`pwd`/dist:/opt/cni/bin \
-		--volume=`pwd`/net.d:/etc/cni/net.d \
+		--volume=$(SOURCE_DIR)/dist:/opt/cni/bin \
+		--volume=$(SOURCE_DIR)/net.d:/etc/cni/net.d \
 		--volume=/var/run:/var/run:rw \
 		--net=host \
 		--pid=host \
