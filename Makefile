@@ -4,6 +4,11 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | cut -d' ' -f8)
 
 # fail if unable to download
 CURL=curl -sSf
+# Figure out the users UID/GID.  These are needed to run docker containers
+# as the current user and ensure that files built inside containers are
+# owned by the current user.
+MY_UID:=$(shell id -u)
+MY_GID:=$(shell id -g)
 
 K8S_VERSION=1.3.1
 CALICO_NODE_VERSION=0.20.0
@@ -59,15 +64,17 @@ endif
 # To update upstream dependencies, delete the glide.lock file first.
 vendor: glide.yaml
 	# To build without Docker just run "glide install -strip-vendor"
+	mkdir -p ${HOME}/.glide
 	if [ "$(LIBCALICOGO_PATH)" != "none" ]; then \
           EXTRA_DOCKER_BIND="-v $(LIBCALICOGO_PATH):/go/src/github.com/projectcalico/libcalico-go:ro"; \
 	fi; \
 	docker run --rm \
+	-v ${HOME}/.glide:/root/.glide:rw \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw $$EXTRA_DOCKER_BIND \
       --entrypoint /bin/sh $(GO_CONTAINER_NAME) -e -c ' \
 	cd /go/src/github.com/projectcalico/calico-cni && \
 	glide install -strip-vendor && \
-	chown $(shell id -u):$(shell id -u) -R vendor'
+	chown $(MY_UID):$(MY_GID) -R vendor /root/.glide'
 
 # Build the Calico network plugin
 dist/calico: $(SRCFILES) vendor
@@ -118,7 +125,7 @@ test-containerized: run-etcd build-containerized
 	-e PLUGIN=calico \
 	-v ${PWD}:/go/src/github.com/projectcalico/calico-cni:rw \
 	$(BUILD_CONTAINER_NAME) /bin/sh -e -c \
-        'make dist/host-local dist/calicoctl && ginkgo && chown $(shell id -u):$(shell id -u) -R dist'
+        'make dist/host-local dist/calicoctl && ginkgo && chown $(MY_UID):$(MY_GID) -R dist'
 	make stop-etcd
 
 # Run the build in a container. Useful for CI
@@ -130,7 +137,7 @@ build-containerized: $(BUILD_CONTAINER_MARKER) vendor
 	-v ${PWD}/dist:/go/src/github.com/projectcalico/calico-cni/dist \
 	$(BUILD_CONTAINER_NAME) bash -c '\
 		make binary && \
-		chown -R $(shell id -u):$(shell id -u) dist'
+		chown -R $(MY_UID):$(MY_GID) dist'
 
 # Etcd is used by the tests
 run-etcd: stop-etcd
