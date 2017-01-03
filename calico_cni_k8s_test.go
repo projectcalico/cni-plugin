@@ -53,11 +53,10 @@ var _ = Describe("CalicoCni", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 				"kubernetes": {
-					        "k8s_api_root": "http://127.0.0.1:8080"
-									    
+                  "k8s_api_root": "http://127.0.0.1:8080"
 				},
 				"policy": {"type": "k8s"},
-	"log_level":"info"
+				"log_level":"info"
 			}`, os.Getenv("ETCD_IP"))
 
 			It("successfully networks the namespace", func() {
@@ -70,8 +69,11 @@ var _ = Describe("CalicoCni", func() {
 				if err != nil {
 					panic(err)
 				}
+
 				name := fmt.Sprintf("run%d", rand.Uint32())
 				interfaceName := k8s.VethNameForWorkload(fmt.Sprintf("%s.%s", K8S_TEST_NS, name))
+
+				// Create a K8s pod w/o any special params
 				_, err = clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
 					ObjectMeta: v1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{Containers: []v1.Container{{
@@ -82,6 +84,26 @@ var _ = Describe("CalicoCni", func() {
 				if err != nil {
 					panic(err)
 				}
+
+				// Now create a K8s pod passing in an IP pool
+				name2 := name + "-pool"
+				pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+					ObjectMeta: v1.ObjectMeta{
+						Name: name2,
+						Annotations: map[string]string{
+							"cni.calico/ipv4pools": "192.169.1.0/24",
+						},
+					},
+					Spec: v1.PodSpec{Containers: []v1.Container{{
+						Name:  fmt.Sprintf("container-%s", name2),
+						Image: "ignore",
+					}}},
+				})
+				if err != nil {
+					panic(err)
+				}
+				fmt.Printf("POD: %#v\n", pod)
+
 				containerID, netnspath, session, contVeth, contAddresses, contRoutes, err := CreateContainer(netconf, name)
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
