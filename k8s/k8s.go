@@ -123,8 +123,8 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			logger.WithField("labels", labels).Debug("Fetched K8s labels")
 			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
 
-			v4pools := annot["cni.calico/ipv4pools"]
-			v6pools := annot["cni.calico/ipv6pools"]
+			v4pools := annot["ipam.cni.projectcalico.org/ipv4pools"]
+			v6pools := annot["ipam.cni.projectcalico.org/ipv6pools"]
 
 			if len(v4pools) != 0 || len(v6pools) != 0 {
 				var stdinData map[string]interface{}
