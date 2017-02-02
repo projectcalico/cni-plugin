@@ -232,7 +232,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 // cni.projectcalico.org/ipamOverrides: "[\"10.0.0.1\", \"2001:db8::1\"]"
 func overrideIPAMResult(ipamOverride string, logger *log.Entry) *types.Result {
 	var ips []string
-	visited4, visited6 := 0
+	var visited4, visited6 int
 
 	err := json.Unmarshal([]byte(ipamOverride), &ips)
 	if err != nil {
@@ -263,7 +263,6 @@ func overrideIPAMResult(ipamOverride string, logger *log.Entry) *types.Result {
 	// We also make sure there is only one IPv4 and/or one IPv6 passed in,
 	// since CNI spec only supports one of each right now.
 	for _, ip := range ips {
-		var ipMask net.IPMask
 
 		ipAddr := net.ParseIP(ip)
 		if ipAddr == nil {
