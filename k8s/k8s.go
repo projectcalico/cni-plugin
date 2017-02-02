@@ -106,7 +106,6 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		// Only used by K8s so if its null then we're not doing k8s stuff
 		var labels map[string]string
 		var annot map[string]string
-		var err error
 
 		labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
 		if err != nil {
@@ -164,7 +163,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			logger.Debugf("IPAM plugin returned: %+v", result)
 		} else {
 			// ipamOverride annotation is set so bypass IPMA, and set the IPs manually.
-			result = overrideIPAMResult(ipamOverride)
+			result = overrideIPAMResult(ipamOverride, logger)
 			logger.Debugf("Bypassing IPAM to set the IP config to: %+v", result)
 		}
 
@@ -231,7 +230,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 // but sets IP field manually since IPAM is bypassed with this annotation.
 // Example annotation:
 // cni.projectcalico.org/ipamOverrides: "[\"10.0.0.1\", \"2001:db8::1\"]"
-func overrideIPAMResult(ipamOverride string) types.Result {
+func overrideIPAMResult(ipamOverride string, logger *log.Entry) *types.Result {
 	var ips []string
 	visited4, visited6 := 0
 
@@ -279,7 +278,7 @@ func overrideIPAMResult(ipamOverride string) types.Result {
 			if visited6 >= 1 {
 				logger.Fatal("Can not have more than one IPv6 addresses in ipamOverride annotation")
 			} else {
-				result.IP6.IP.IP = ip
+				result.IP6.IP.IP = ipAddr
 				visited6++
 			}
 		} else {
@@ -287,13 +286,13 @@ func overrideIPAMResult(ipamOverride string) types.Result {
 			if visited4 >= 1 {
 				logger.Fatal("Can not have more than one IPv4 addresses in ipamOverride annotation")
 			} else {
-				result.IP4.IP.IP = ip
+				result.IP4.IP.IP = ipAddr
 				visited4++
 			}
 		}
 	}
 
-	return result
+	return &result
 }
 
 func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset, error) {
