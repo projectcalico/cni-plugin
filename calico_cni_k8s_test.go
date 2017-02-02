@@ -177,7 +177,7 @@ var _ = Describe("CalicoCni", func() {
 					ObjectMeta: v1.ObjectMeta{
 						Name: name2,
 						Annotations: map[string]string{
-							"ipam.cni.projectcalico.org/ipv4pools": "192.169.1.0/24",
+							"ipam.cni.projectcalico.org/ipv4pools": "10.0.0.0/24",
 						},
 					},
 					Spec: v1.PodSpec{Containers: []v1.Container{{
@@ -208,7 +208,7 @@ var _ = Describe("CalicoCni", func() {
 
 				// This will fail until I figure out how to call the CNI plugin
 				ip = contAddresses[0].IP.String()
-				Expect(ip).Should(Equal("192.169.1.0"))
+				Expect(ip).Should(Equal("10.0.0.2"))
 			})
 		})
 	})
