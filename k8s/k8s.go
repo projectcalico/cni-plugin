@@ -103,13 +103,69 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
 		}
 
-		// Run the IPAM plugin
-		logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
-		result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+		// Only used by K8s so if its null then we're not doing k8s stuff
+		var labels map[string]string
+		var annot map[string]string
+
+		labels, annot, err = getK8sLabelsAnnotations(client, k8sArgs)
 		if err != nil {
+			// Cleanup IP allocation and return the error.
+			utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
 			return nil, err
 		}
-		logger.Debugf("IPAM plugin returned: %+v", result)
+		// Only attempt to fetch the labels and annotations from Kubernetes
+		// if the policy type has been set to "k8s". This allows users to
+		// run the plugin under Kubernetes without needing it to access the
+		// Kubernetes API
+		if conf.Policy.PolicyType == "k8s" && conf.IPAM.Type == "calico-ipam" {
+
+			logger.WithField("labels", labels).Debug("Fetched K8s labels")
+			logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
+
+			v4pools := annot["ipam.cni.projectcalico.org/ipv4pools"]
+			v6pools := annot["ipam.cni.projectcalico.org/ipv6pools"]
+
+			if len(v4pools) != 0 || len(v6pools) != 0 {
+				var stdinData map[string]interface{}
+				if err := json.Unmarshal(args.StdinData, &stdinData); err != nil {
+					utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+					return nil, err
+				}
+				stdinData["ipam"].(map[string]interface{})["ipv4pools"] = v4pools
+				stdinData["ipam"].(map[string]interface{})["ipv6pools"] = v6pools
+
+				if len(v4pools) > 0 {
+					fmt.Fprintf(os.Stderr, "Calico CNI setting ipv4pools to %q", v4pools)
+				}
+				if len(v6pools) > 0 {
+					fmt.Fprintf(os.Stderr, "Calico CNI setting ipv6pools to %q", v6pools)
+				}
+				newData, err := json.Marshal(stdinData)
+				if err != nil {
+					utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
+					return nil, err
+				}
+				args.StdinData = newData
+				logger.WithField("stdin", args.StdinData).Debug("Updated stdin data")
+			}
+		}
+
+		ipamOverride := annot["cni.projectcalico.org/ipamOverrides"]
+
+		// Call IPAM plugin if ipamOverride annotation is not present.
+		if ipamOverride == "" {
+			// Run the IPAM plugin
+			logger.Debugf("Calling IPAM plugin %s", conf.IPAM.Type)
+			result, err = ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
+			if err != nil {
+				return nil, err
+			}
+			logger.Debugf("IPAM plugin returned: %+v", result)
+		} else {
+			// ipamOverride annotation is set so bypass IPMA, and set the IPs manually.
+			result = overrideIPAMResult(ipamOverride, logger)
+			logger.Debugf("Bypassing IPAM to set the IP config to: %+v", result)
+		}
 
 		// Create the endpoint object and configure it.
 		endpoint = api.NewWorkloadEndpoint()
@@ -117,7 +173,7 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 		endpoint.Metadata.Node = hostname
 		endpoint.Metadata.Orchestrator = orchestrator
 		endpoint.Metadata.Workload = workload
-		endpoint.Metadata.Labels = make(map[string]string)
+		endpoint.Metadata.Labels = labels // Only when policy type == k8s
 
 		// Set the profileID according to whether Kubernetes policy is required.
 		// If it's not, then just use the network name (which is the normal behavior)
@@ -135,19 +191,6 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 			return nil, err
 		}
 		logger.WithField("endpoint", endpoint).Info("Populated endpoint")
-
-		// Only attempt to fetch the labels from Kubernetes if the policy type has been set to "k8s"
-		// This allows users to run the plugin under Kubernetes without needing it to access the Kubernetes API
-		if conf.Policy.PolicyType == "k8s" {
-			labels, err := getK8sLabels(client, k8sArgs)
-			if err != nil {
-				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf.IPAM.Type, args.StdinData)
-				return nil, err
-			}
-			logger.WithField("labels", labels).Info("Fetched K8s labels")
-			endpoint.Metadata.Labels = labels
-		}
 	}
 	fmt.Fprintf(os.Stderr, "Calico CNI using IPs: %s\n", endpoint.Spec.IPNetworks)
 
@@ -181,6 +224,74 @@ func CmdAddK8s(args *skel.CmdArgs, conf utils.NetConf, hostname string, calicoCl
 	logger.Info("Wrote updated endpoint to datastore")
 
 	return result, nil
+}
+
+// overrideIPAMResult generates types.Result like the one produced by IPAM plugin,
+// but sets IP field manually since IPAM is bypassed with this annotation.
+// Example annotation:
+// cni.projectcalico.org/ipamOverrides: "[\"10.0.0.1\", \"2001:db8::1\"]"
+func overrideIPAMResult(ipamOverride string, logger *log.Entry) *types.Result {
+	var ips []string
+	var visited4, visited6 int
+
+	err := json.Unmarshal([]byte(ipamOverride), &ips)
+	if err != nil {
+		logger.WithField("annotation", ipamOverride).Fatal("Invalid JSON")
+	}
+
+	result := types.Result{
+		IP4: &types.IPConfig{
+			IP: net.IPNet{
+				Mask: net.CIDRMask(32, 32),
+			},
+		},
+		IP6: &types.IPConfig{
+			IP: net.IPNet{
+				Mask: net.CIDRMask(128, 128),
+			},
+		},
+		DNS: types.DNS{},
+	}
+
+	// annotation value can't be empty.
+	if len(ips) == 0 {
+		logger.WithField("annotation", "cni.projectcalico.org/ipamOverrides").Fatal("No IPs specified")
+	}
+
+	// Go through all the IPs passed in as annotation value and populate
+	// the result variable with IP4 and/or IP6 IPs.
+	// We also make sure there is only one IPv4 and/or one IPv6 passed in,
+	// since CNI spec only supports one of each right now.
+	for _, ip := range ips {
+
+		ipAddr := net.ParseIP(ip)
+		if ipAddr == nil {
+			logger.WithField("IP", ip).Fatal("Invalid IP format")
+		}
+
+		// It's an IPv6 address if ip.To4 is nil.
+		if ipAddr.To4() == nil {
+			// We only allow one IPv4 and one IPv6 at the moment.
+			// So if we see more than one of IPv4 or IPv6 then we throw an error.
+			// If/when CNI spec supports more than one IP, we can loosen this requirement.
+			if visited6 >= 1 {
+				logger.Fatal("Can not have more than one IPv6 addresses in ipamOverride annotation")
+			} else {
+				result.IP6.IP.IP = ipAddr
+				visited6++
+			}
+		} else {
+			// It's an IPv4 address.
+			if visited4 >= 1 {
+				logger.Fatal("Can not have more than one IPv4 addresses in ipamOverride annotation")
+			} else {
+				result.IP4.IP.IP = ipAddr
+				visited4++
+			}
+		}
+	}
+
+	return &result
 }
 
 func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset, error) {
@@ -232,20 +343,20 @@ func newK8sClient(conf utils.NetConf, logger *log.Entry) (*kubernetes.Clientset,
 	return kubernetes.NewForConfig(config)
 }
 
-func getK8sLabels(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (map[string]string, error) {
-	pods, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME))
+func getK8sLabelsAnnotations(client *kubernetes.Clientset, k8sargs utils.K8sArgs) (map[string]string, map[string]string, error) {
+	pod, err := client.Pods(string(k8sargs.K8S_POD_NAMESPACE)).Get(fmt.Sprintf("%s", k8sargs.K8S_POD_NAME))
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	labels := pods.Labels
+	labels := pod.Labels
 	if labels == nil {
 		labels = make(map[string]string)
 	}
 
 	labels["calico/k8s_ns"] = fmt.Sprintf("%s", k8sargs.K8S_POD_NAMESPACE)
 
-	return labels, nil
+	return labels, pod.Annotations, nil
 }
 
 func getPodCidr(client *kubernetes.Clientset, conf utils.NetConf, hostname string) (string, error) {
