@@ -106,6 +106,8 @@ clusters:
     insecure-skip-tls-verify: true
 users:
 - name: calico 
+  user:
+    token: "${SERVICEACCOUNT_TOKEN:-}"
 contexts:
 - name: calico-context
   context:
