@@ -177,11 +177,69 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err.Error()).Should(Equal("Link not found"))
 			})
 
+			Context("successfully create the default profile with k8s orchestrator but policy type not equal to 'k8s'", func() {
+				It("successfully creates the profile with correct rules, labels, etc.", func() {
+					netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "name": "net2",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			 	  "ipam": {
+			    	 "type": "calico-ipam"
+			         },
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"log_level":"info"
+				}`, os.Getenv("ETCD_IP"))
+
+					// Create a new ipPool.
+					ipPool := "172.16.0.0/16"
+					c, err := testutils.NewClient("")
+					Expect(err).NotTo(HaveOccurred())
+
+					testutils.CreateNewIPPool(*c, ipPool, false, false, true)
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod.
+					name := fmt.Sprintf("run%d-prof", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name:        name,
+							Annotations: map[string]string{},
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, _, _, _, _, _, err = CreateContainer(netconfCalicoIPAM, name, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					// Profile is created with correct details.
+					profile, err := calicoClient.Profiles().Get(api.ProfileMetadata{Name: "net2"})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(profile.Metadata.Labels).Should(HaveKeyWithValue("projectcalico.org/network", "net2"))
+					Expect(profile.Spec.EgressRules).Should(Equal([]api.Rule{{Action: "allow"}}))
+					Expect(profile.Spec.IngressRules).Should(Equal([]api.Rule{{Action: "allow"}}))
+
+				})
+			})
+
 			Context("using calico-ipam with ipPools annotation", func() {
 				It("successfully assigns an IP address from the annotated ipPool", func() {
 					netconfCalicoIPAM := fmt.Sprintf(`
 				{
-			      "name": "net2",
+			      "name": "net3",
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 			 	  "ipam": {
@@ -239,7 +297,7 @@ var _ = Describe("CalicoCni", func() {
 				It("should successfully assigns the annotated IP address", func() {
 					netconfCalicoIPAM := fmt.Sprintf(`
 				{
-			      "name": "net3",
+			      "name": "net4",
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 			 	  "ipam": {},
@@ -315,7 +373,7 @@ var _ = Describe("CalicoCni", func() {
 				It("should successfully assigns the annotated IP address", func() {
 					netconfCalicoIPAM := fmt.Sprintf(`
 				{
-			      "name": "net4",
+			      "name": "net5",
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
 				  "ipam": {
@@ -401,7 +459,7 @@ var _ = Describe("CalicoCni", func() {
 				It("Should successfully assign IP both times and successfully release it in the middle", func() {
 					netconfHostLocalIPAM := fmt.Sprintf(`
 				  {
-					"name": "net5",
+					"name": "net6",
 					  "type": "calico",
 					  "etcd_endpoints": "http://%s:2379",
 					  "ipam": {

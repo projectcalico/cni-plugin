@@ -222,19 +222,19 @@ func cmdAdd(args *skel.CmdArgs) error {
 		if !exists {
 			// The profile doesn't exist so needs to be created. The rules vary depending on whether k8s is being used.
 			// Under k8s (without full policy support) the rule is permissive and allows all traffic.
-			// Otherwise, incoming traffic is only allowed from profiles with the same tag.
+			// Otherwise, incoming traffic is only allowed from profiles with the same labels.
 			fmt.Fprintf(os.Stderr, "Calico CNI creating profile: %s\n", conf.Name)
 			var inboundRules []api.Rule
 			if orchestrator == "k8s" {
 				inboundRules = []api.Rule{{Action: "allow"}}
 			} else {
-				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Tag: conf.Name}}}
+				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Selector: fmt.Sprintf("projectcalico.org/network == %s", conf.Name)}}}
 			}
 
 			profile := &api.Profile{
 				Metadata: api.ProfileMetadata{
-					Name: conf.Name,
-					Tags: []string{conf.Name},
+					Name:   conf.Name,
+					Labels: map[string]string{"projectcalico.org/network": conf.Name},
 				},
 				Spec: api.ProfileSpec{
 					EgressRules:  []api.Rule{{Action: "allow"}},
