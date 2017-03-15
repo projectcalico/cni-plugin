@@ -228,7 +228,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 			if orchestrator == "k8s" {
 				inboundRules = []api.Rule{{Action: "allow"}}
 			} else {
-				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Selector: fmt.Sprintf("projectcalico.org/network == %s", conf.Name)}}}
+				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Selector: fmt.Sprintf("projectcalico.org/network == \"%s\"", conf.Name)}}}
 			}
 
 			profile := &api.Profile{
