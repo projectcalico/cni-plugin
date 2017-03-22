@@ -180,7 +180,7 @@ func CreateClient(conf NetConf) (*client.Client, error) {
 	log.Infof("Configured environment: %+v", os.Environ())
 
 	// Load the client config from the current environment.
-	clientConfig, err := client.LoadClientConfig("")
+	clientConfig, err := client.LoadClientConfig(conf.DatastoreFile)
 	if err != nil {
 		return nil, err
 	}

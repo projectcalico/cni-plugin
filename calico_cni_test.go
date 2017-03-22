@@ -3,6 +3,7 @@ package main_test
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 
@@ -245,6 +246,119 @@ var _ = Describe("CalicoCni", func() {
 				Expect(endpoints.Items).Should(HaveLen(1))
 				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
 					Node:         "namedNodename",
+					Name:         "eth0",
+					Workload:     containerID,
+					Orchestrator: "cni",
+				}))
+
+				_, err = DeleteContainer(netconf, netnspath, "")
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+		})
+	})
+
+	Describe("Check datastore configuration", func() {
+		Context("Read config from file", func() {
+			It("Check reading config file", func() {
+				cfgFile, err := ioutil.TempFile("/tmp", "cni_test")
+				Expect(err).To(BeNil())
+				defer func() { _ = os.Remove(cfgFile.Name()) }()
+				netconf := fmt.Sprintf(`
+			    {
+			      "name": "net1",
+			      "type": "calico",
+			      "datastore_file": "%s",
+			      "ipam": {
+			        "type": "host-local",
+			        "subnet": "10.0.0.0/8"
+			      }
+			    }`, cfgFile.Name())
+
+				cfgData := fmt.Sprintf(`{
+					"kind": "calicoApiConfig",
+					"apiVersion": "v1",
+					"spec": {
+						"etcdEndpoints": "http://%s:2379"
+					}
+				}`, os.Getenv("ETCD_IP"))
+
+				_, err = cfgFile.Write([]byte(cfgData))
+				Expect(err).To(BeNil())
+				err = cfgFile.Close()
+				Expect(err).To(BeNil())
+
+				containerID, netnspath, session, _, _, _, err := CreateContainer(netconf, "", "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+
+				result := types.Result{}
+				if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
+					panic(err)
+				}
+
+				// The endpoint is created in etcd
+				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(1))
+				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+					Node:         hostname,
+					Name:         "eth0",
+					Workload:     containerID,
+					Orchestrator: "cni",
+				}))
+
+				_, err = DeleteContainer(netconf, netnspath, "")
+				Expect(err).ShouldNot(HaveOccurred())
+			})
+		})
+
+		// This is expected to change with upcoming changes in libcalico-go
+		// where CNI config (env variables) should override the file
+		Context("Datastore file overrides Endpoint in CNI config", func() {
+			It("connects to endpoint from file config", func() {
+				cfgFile, err := ioutil.TempFile("/tmp", "cni_test")
+				Expect(err).To(BeNil())
+				defer func() { _ = os.Remove(cfgFile.Name()) }()
+				netconf := fmt.Sprintf(`
+			    {
+			      "name": "net1",
+			      "type": "calico",
+			      "datastore_file": "%s",
+				  "etcd_endpoints": "http://bad.ip:2379",
+			      "ipam": {
+			        "type": "host-local",
+			        "subnet": "10.0.0.0/8"
+			      }
+			    }`, cfgFile.Name())
+
+				cfgData := fmt.Sprintf(`{
+					"kind": "calicoApiConfig",
+					"apiVersion": "v1",
+					"spec": {
+						"etcdEndpoints": "http://%s:2379"
+					}
+				}`, os.Getenv("ETCD_IP"))
+
+				_, err = cfgFile.Write([]byte(cfgData))
+				Expect(err).To(BeNil())
+				err = cfgFile.Close()
+				Expect(err).To(BeNil())
+
+				containerID, netnspath, session, _, _, _, err := CreateContainer(netconf, "", "")
+				Expect(err).ShouldNot(HaveOccurred())
+				Eventually(session).Should(gexec.Exit())
+
+				result := types.Result{}
+				if err := json.Unmarshal(session.Out.Contents(), &result); err != nil {
+					panic(err)
+				}
+
+				// The endpoint is created in etcd
+				endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(1))
+				Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+					Node:         hostname,
 					Name:         "eth0",
 					Workload:     containerID,
 					Orchestrator: "cni",
