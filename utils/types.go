@@ -57,13 +57,14 @@ type NetConf struct {
 	MTU            int        `json:"mtu"`
 	Hostname       string     `json:"hostname"`
 	Nodename       string     `json:"nodename"`
-	DatastoreType  string     `json:"datastore_type"`
-	EtcdAuthority  string     `json:"etcd_authority"`
-	EtcdEndpoints  string     `json:"etcd_endpoints"`
 	LogLevel       string     `json:"log_level"`
 	Policy         Policy     `json:"policy"`
 	Kubernetes     Kubernetes `json:"kubernetes"`
 	Args           Args       `json:"args"`
+	DatastoreFile  string     `json:"datastore_file"`
+	DatastoreType  string     `json:"datastore_type"`
+	EtcdAuthority  string     `json:"etcd_authority"`
+	EtcdEndpoints  string     `json:"etcd_endpoints"`
 	EtcdScheme     string     `json:"etcd_scheme"`
 	EtcdKeyFile    string     `json:"etcd_key_file"`
 	EtcdCertFile   string     `json:"etcd_cert_file"`
