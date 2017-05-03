@@ -4,7 +4,7 @@
 
 SRCFILES=calico.go $(wildcard utils/*.go) $(wildcard k8s/*.go) ipam/calico-ipam.go
 TEST_SRCFILES=$(wildcard test_utils/*.go) $(wildcard calico_cni_*.go)
-LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
+LOCAL_IP_ENV?=$(shell docker run -ti --rm --net=host busybox ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 
 # fail if unable to download
 CURL=curl -sSf
@@ -109,6 +109,9 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
 .PHONY: fetch-cni-bins
 fetch-cni-bins: dist/flannel dist/loopback dist/host-local
 
+dist/echo-ipam:
+	cp utils/echo-ipam dist/
+
 dist/flannel dist/loopback dist/host-local:
 	mkdir -p dist
 	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/$(CNI_VERSION)/cni-amd64-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local
@@ -117,7 +120,7 @@ dist/flannel dist/loopback dist/host-local:
 # .go-pkg-cache can't be used (since tests run as root)
 .PHONY: test-containerized
 ## Run the tests in a container (as root)
-test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-local
+test-containerized: run-etcd run-k8s-apiserver build-containerized dist/host-local dist/echo-ipam
 	docker run --rm --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
 	-e LOCAL_USER_ID=0 \
@@ -145,7 +148,7 @@ run-test-containerized-without-building: run-etcd run-k8s-apiserver
 ## Run the tests in a container (as root) for different CNI spec versions
 ## to make sure we don't break backwards compatiblity.
 .PHONY: test-containerized-cni-versions
-test-containerized-cni-versions: build-containerized dist/host-local;
+test-containerized-cni-versions: build-containerized dist/host-local dist/echo-ipam;
 	for cniversion in "0.2.0" "0.3.1" ; do \
 		make run-test-containerized-without-building CNI_SPEC_VERSION=$$cniversion; \
 	done
