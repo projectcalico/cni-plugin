@@ -885,6 +885,59 @@ var _ = Describe("CalicoCni", func() {
 					_, err = DeleteContainer(netconf, netnspath, "")
 					Expect(err).ShouldNot(HaveOccurred())
 				})
+
+				Context("when IPAM returns an empty result", func() {
+					It("should try to release any IP addresses", func() {
+						netconfCalicoIPAM := fmt.Sprintf(`
+				{
+			      "cniVersion": "%s",
+				  "name": "net2",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+			 	  "ipam": {
+			    	 "type": "echo-ipam",
+				 "return": "{}"
+			         },
+					"kubernetes": {
+					  "k8s_api_root": "http://127.0.0.1:8080"
+					 },
+					"policy": {"type": "k8s"},
+					"log_level":"info"
+				}`, cniVersion, os.Getenv("ETCD_IP"))
+
+						// Now create a K8s pod passing in an IP pool.
+						config, err := clientcmd.DefaultClientConfig.ClientConfig()
+						Expect(err).NotTo(HaveOccurred())
+						clientset, err := kubernetes.NewForConfig(config)
+						Expect(err).NotTo(HaveOccurred())
+
+						name := fmt.Sprintf("run%d-pool", rand.Uint32())
+						pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+							ObjectMeta: v1.ObjectMeta{
+								Name: name,
+							},
+							Spec: v1.PodSpec{Containers: []v1.Container{{
+								Name:  fmt.Sprintf("container-%s", name),
+								Image: "ignore",
+							}}},
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						logger.Infof("Created POD object: %v", pod)
+
+						_, netnspath, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+						Expect(err).NotTo(HaveOccurred())
+
+						podIP := contAddresses[0].IP
+						logger.Infof("All container IPs: %v", contAddresses)
+						logger.Infof("Container got IP address: %s", podIP)
+
+						// Delete the container.
+						_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+						Expect(err).ShouldNot(HaveOccurred())
+					})
+				})
+
 			})
 		})
 	})
