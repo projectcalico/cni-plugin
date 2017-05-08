@@ -38,6 +38,7 @@ docker-image: $(DEPLOY_CONTAINER_MARKER)
 .PHONY: clean
 clean:
 	rm -rf dist vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache
+	rm -rf .echo-ipam-tmp
 
 release: clean
 ifndef VERSION
@@ -110,7 +111,7 @@ $(DEPLOY_CONTAINER_MARKER): Dockerfile build-containerized fetch-cni-bins
 fetch-cni-bins: dist/flannel dist/loopback dist/host-local
 
 dist/echo-ipam:
-	cp utils/echo-ipam dist/
+	cp test_utils/echo-ipam dist/
 
 dist/flannel dist/loopback dist/host-local:
 	mkdir -p dist

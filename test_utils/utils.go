@@ -402,3 +402,20 @@ func CheckSysctlValue(sysctlPath, value string) error {
 
 	return nil
 }
+
+// HasEchoIPAMAllocation returns true if an IP has been allocated for the given
+// containerID using the echo-ipam plugin, and false if no IP is currently allocated.
+func HasEchoIPAMAllocation(containerid string) bool {
+	_, err := os.Stat(fmt.Sprintf(".echo-ipam-tmp/%s", containerid))
+	if err != nil {
+		if os.IsNotExist(err) {
+			// The IP alloation does not exist.
+			return false
+		}
+		// Unexpected error checking the allocation.
+		log.Panicf("Unexpected error checking IP allocation: %s", err)
+		return false
+	}
+	// The IP allocation file exists.
+	return true
+}

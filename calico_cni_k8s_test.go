@@ -888,21 +888,24 @@ var _ = Describe("CalicoCni", func() {
 
 				Context("when IPAM returns an empty result", func() {
 					It("should try to release any IP addresses", func() {
+						// Build a network config using the mock "echo-ipam" IPAM plugin.  This IPAM
+						// plugin will just echo back the network config over stdout as its result,
+						// which in this test case will be invalid and cause the Calico plugin to
+						// attempt to cleanup any IP allocations.
 						netConf := fmt.Sprintf(`
 				{
-			      "cniVersion": "%s",
+				  "cniVersion": "%s",
 				  "name": "net2",
 				  "type": "calico",
 				  "etcd_endpoints": "http://%s:2379",
-			 	  "ipam": {
-			    	 "type": "echo-ipam",
-				 "return": "{}"
-			         },
-					"kubernetes": {
-					  "k8s_api_root": "http://127.0.0.1:8080"
-					 },
-					"policy": {"type": "k8s"},
-					"log_level":"info"
+				  "ipam": {
+				    "type": "echo-ipam",
+				  },
+				  "kubernetes": {
+				    "k8s_api_root": "http://127.0.0.1:8080"
+				  },
+				  "policy": {"type": "k8s"},
+				  "log_level":"debug"
 				}`, cniVersion, os.Getenv("ETCD_IP"))
 
 						// Now create a K8s pod
@@ -925,8 +928,11 @@ var _ = Describe("CalicoCni", func() {
 
 						logger.Infof("Created POD object: %v", pod)
 
-						_, netnspath, _, _, _, _, _, err := CreateContainer(netConf, name, "")
+						containerID, netnspath, _, _, _, _, _, err := CreateContainer(netConf, name, "")
 						Expect(err).To(HaveOccurred())
+
+						// Expect that the echo-ipam plugin cleaned up the IP allocation.
+						Expect(HasEchoIPAMAllocation(containerID)).ToNot(BeTrue())
 
 						// Delete the container.
 						_, err = DeleteContainer(netConf, netnspath, name)

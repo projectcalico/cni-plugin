@@ -1,8 +1,0 @@
-#!/bin/sh
-
-# A mock IPAM plugin which just echo's back what it was given.
-
-while read line
-do
-	echo $line
-done

@@ -10,3 +10,4 @@ delstats
 *.pyc
 *.created
 tmp-cni
+.echo-ipam-tmp
