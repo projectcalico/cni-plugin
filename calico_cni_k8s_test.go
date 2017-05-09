@@ -938,8 +938,59 @@ var _ = Describe("CalicoCni", func() {
 						_, err = DeleteContainer(netConf, netnspath, name)
 						Expect(err).ShouldNot(HaveOccurred())
 					})
-				})
 
+					It("should release IPs if an incompatible version is returned from IPAM", func() {
+						// Build a network config using the mock "echo-ipam" IPAM plugin.  This IPAM
+						// plugin will just echo back the network config over stdout as its result,
+						// which in this test case will be invalid and cause the Calico plugin to
+						// attempt to cleanup any IP allocations.
+						netConf := fmt.Sprintf(`
+				{
+				  "cniVersion": "invalid-version",
+				  "name": "net2",
+				  "type": "calico",
+				  "etcd_endpoints": "http://%s:2379",
+				  "ipam": {
+				    "type": "echo-ipam",
+				  },
+				  "kubernetes": {
+				    "k8s_api_root": "http://127.0.0.1:8080"
+				  },
+				  "policy": {"type": "k8s"},
+				  "log_level":"debug"
+				}`, os.Getenv("ETCD_IP"))
+
+						// Now create a K8s pod
+						config, err := clientcmd.DefaultClientConfig.ClientConfig()
+						Expect(err).NotTo(HaveOccurred())
+						clientset, err := kubernetes.NewForConfig(config)
+						Expect(err).NotTo(HaveOccurred())
+
+						name := fmt.Sprintf("run%d-pool", rand.Uint32())
+						pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+							ObjectMeta: v1.ObjectMeta{
+								Name: name,
+							},
+							Spec: v1.PodSpec{Containers: []v1.Container{{
+								Name:  fmt.Sprintf("container-%s", name),
+								Image: "ignore",
+							}}},
+						})
+						Expect(err).NotTo(HaveOccurred())
+
+						logger.Infof("Created POD object: %v", pod)
+
+						containerID, netnspath, _, _, _, _, _, err := CreateContainer(netConf, name, "")
+						Expect(err).To(HaveOccurred())
+
+						// Expect that the echo-ipam plugin cleaned up the IP allocation.
+						Expect(HasEchoIPAMAllocation(containerID)).ToNot(BeTrue())
+
+						// Delete the container.
+						_, err = DeleteContainer(netConf, netnspath, name)
+						Expect(err).ShouldNot(HaveOccurred())
+					})
+				})
 			})
 		})
 	})
