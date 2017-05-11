@@ -1,5 +1,5 @@
-hash: 3f2795f4becaab651ae45df3703b4e248fc43b18cba8cdaf803d3c7a6a7b6ae1
-updated: 2017-05-08T21:58:30.131790866-07:00
+hash: 6f4b0243b3ceb4ba227ed04c9f38f0d822fca97b843a462f76be74f22bde9177
+updated: 2017-05-10T16:13:14.162067148-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -22,7 +22,7 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: ac1c7eba21545c4ee025f2c340e143cacb53c754
+  version: d2716fc5ae7909a3b9651e31cfb0eba22b4920c3
   subpackages:
   - client
   - pkg/fileutil
@@ -30,6 +30,7 @@ imports:
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
+  - version
 - name: github.com/coreos/go-iptables
   version: fbb73372b87f6e89951c2b6b31470c2c9d5cfae3
   subpackages:
@@ -42,6 +43,10 @@ imports:
   - key
   - oauth2
   - oidc
+- name: github.com/coreos/go-semver
+  version: 568e959cd89871e61434c1143528d9162da89ef2
+  subpackages:
+  - semver
 - name: github.com/coreos/go-systemd
   version: 2688e91251d9d8e404e86dd8f096e23b2f086958
   subpackages:
@@ -100,7 +105,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: 5c008110b20b657eb7e005b83d0a5f6aa6bb5f4b
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -154,7 +159,8 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: 4c64e80b39466c5092e717246c6226dc4ed26b76
+  version: b0dd8735d3d509dfc334962981b0a48aa4bdf9b8
+  repo: https://github.com/caseydavenport/libcalico-go.git
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -186,7 +192,7 @@ imports:
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
 - name: github.com/Sirupsen/logrus
-  version: c078b1e43f58d563c74cebe63c85789e76ddb627
+  version: d26492970760ca5d33129d2d799e34be5c4782eb
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -220,7 +226,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 076b546753157f758b316e59bcb51e6807c04057
+  version: d75a52659825e75fff6158388dddc6a5b04f9ba5
   subpackages:
   - unix
 - name: golang.org/x/text

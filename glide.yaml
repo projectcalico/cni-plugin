@@ -15,7 +15,8 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: v1.2.1
+  version: remove-kdd-wep-apply
+  repo: https://github.com/caseydavenport/libcalico-go.git
   subpackages:
   - lib/api
   - lib/client
