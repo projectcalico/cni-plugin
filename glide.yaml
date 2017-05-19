@@ -15,7 +15,8 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: v1.2.1
+  repo: git@github.com:gunjan5/libcalico-go.git
+  version: poollist
   subpackages:
   - lib/api
   - lib/client
