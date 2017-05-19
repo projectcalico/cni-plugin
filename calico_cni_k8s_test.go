@@ -938,6 +938,369 @@ var _ = Describe("CalicoCni", func() {
 					Expect(err).ShouldNot(HaveOccurred())
 				})
 			})
+
+			Context("specify one IPv4 pool in the CNI config", func() {
+				It("pod should get an IP from the IP Pool", func() {
+					ipv4pool := "10.0.0.0/24"
+					netconfCalicoIPAM := fmt.Sprintf(`
+						{
+						"cniVersion": "%s",
+						"name": "net10",
+						"type": "calico",
+						"etcd_endpoints": "http://%s:2379",
+						"ipam": {
+							"type": "calico-ipam",
+							"ipv4_pools": ["%s"]
+							},
+						"kubernetes": {
+							  "k8s_api_root": "http://127.0.0.1:8080"
+							 },
+						"policy": {"type": "k8s"},
+						"log_level":"info"
+						}`, cniVersion, os.Getenv("ETCD_IP"), ipv4pool)
+
+					// Create a new ipPool.
+					c, _ := client.NewFromEnv()
+					testutils.CreateNewIPPool(*c, ipv4pool, false, false, true)
+
+					_, ipPoolCIDR, err := net.ParseCIDR(ipv4pool)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in more than one IPv4 address.
+					name := fmt.Sprintf("run%d-ip", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, netnspath, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					logger.Infof("Container got IP address: %s", podIP)
+					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
+			Context("specify two IPv4 pools in the CNI config", func() {
+				It("pod should get an IP from the first IP Pool", func() {
+					ipv4pool := "10.0.0.0/24"
+					ipv4pool2 := "20.0.0.0/24"
+					netconfCalicoIPAM := fmt.Sprintf(`
+						{
+						"cniVersion": "%s",
+						"name": "net11",
+						"type": "calico",
+						"etcd_endpoints": "http://%s:2379",
+						"ipam": {
+							"type": "calico-ipam",
+							"ipv4_pools": ["%s", "%s"]
+							},
+						"kubernetes": {
+							  "k8s_api_root": "http://127.0.0.1:8080"
+							 },
+						"policy": {"type": "k8s"},
+						"log_level":"info"
+						}`, cniVersion, os.Getenv("ETCD_IP"), ipv4pool, ipv4pool2)
+
+					// Create a new ipPool.
+					c, _ := client.NewFromEnv()
+					testutils.CreateNewIPPool(*c, ipv4pool, false, false, true)
+					testutils.CreateNewIPPool(*c, ipv4pool2, false, false, true)
+
+					_, ipPoolCIDR, err := net.ParseCIDR(ipv4pool)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in more than one IPv4 address.
+					name := fmt.Sprintf("run%d-ip", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, netnspath, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					logger.Infof("Container got IP address: %s", podIP)
+					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
+			Context("specify two IPv4 pools in the CNI config and disable the first IP Pool", func() {
+				It("pod should get an IP from the second IP Pool", func() {
+					ipv4pool := "10.0.0.0/24"
+					ipv4pool2 := "20.0.0.0/24"
+					netconfCalicoIPAM := fmt.Sprintf(`
+						{
+						"cniVersion": "%s",
+						"name": "net12",
+						"type": "calico",
+						"etcd_endpoints": "http://%s:2379",
+						"ipam": {
+							"type": "calico-ipam",
+							"ipv4_pools": ["%s", "%s"]
+							},
+						"kubernetes": {
+							  "k8s_api_root": "http://127.0.0.1:8080"
+							 },
+						"policy": {"type": "k8s"},
+						"log_level":"info"
+						}`, cniVersion, os.Getenv("ETCD_IP"), ipv4pool, ipv4pool2)
+
+					// Create a new ipPool.
+					c, _ := client.NewFromEnv()
+
+					// Create IP Pool1 and disable it.
+					testutils.CreateNewIPPool(*c, ipv4pool, false, false, false)
+
+					// Create the second IP Pool.
+					testutils.CreateNewIPPool(*c, ipv4pool2, false, false, true)
+
+					_, ipPoolCIDR2, err := net.ParseCIDR(ipv4pool2)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in more than one IPv4 address.
+					name := fmt.Sprintf("run%d-ip", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, netnspath, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					logger.Infof("Container got IP address: %s", podIP)
+
+					// Pod should have gotten an IP from the second IP Pool.
+					Expect(ipPoolCIDR2.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
+			Context("specify an IPv4 pool in the CNI config, and request a specific IP with ipAddrs annotation from a different IP Pool", func() {
+				It("pod should get the IP specifically requested by the ipAddrs annotation", func() {
+					ipv4pool := "10.0.0.0/24"
+					ipv4pool2 := "20.0.0.0/24"
+					netconfCalicoIPAM := fmt.Sprintf(`
+						{
+						"cniVersion": "%s",
+						"name": "net13",
+						"type": "calico",
+						"etcd_endpoints": "http://%s:2379",
+						"ipam": {
+							"type": "calico-ipam",
+							"ipv4_pools": ["%s"]
+							},
+						"kubernetes": {
+							  "k8s_api_root": "http://127.0.0.1:8080"
+							 },
+						"policy": {"type": "k8s"},
+						"log_level":"info"
+						}`, cniVersion, os.Getenv("ETCD_IP"), ipv4pool)
+
+					// Create a new ipPool.
+					c, _ := client.NewFromEnv()
+
+					// Create the IP Pool specified in the CNI config.
+					testutils.CreateNewIPPool(*c, ipv4pool, false, false, true)
+
+					// Create another IP Pool from which we are going to request a specific IP address.
+					testutils.CreateNewIPPool(*c, ipv4pool2, false, false, true)
+
+					// Specific IP to assign to the pod.
+					requestedIP := net.IPv4(20, 0, 0, 111).To4()
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in more than one IPv4 address.
+					name := fmt.Sprintf("run%d-ip", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+							Annotations: map[string]string{
+								"cni.projectcalico.org/ipAddrs": "[\"20.0.0.111\"]",
+							},
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					containerID, netnspath, _, contVeth, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					Expect(err).NotTo(HaveOccurred())
+					mac := contVeth.Attrs().HardwareAddr
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					logger.Infof("Container got IP address: %s", podIP)
+					Expect(podIP).Should(Equal(requestedIP))
+
+					interfaceName := k8s.VethNameForWorkload(fmt.Sprintf("%s.%s", K8S_TEST_NS, name))
+
+					// Make sure WorkloadEndpoint is created and has the requested IP in the datastore.
+					endpoints, err := calicoClient.WorkloadEndpoints().List(api.WorkloadEndpointMetadata{})
+					Expect(err).ShouldNot(HaveOccurred())
+					Expect(endpoints.Items).Should(HaveLen(1))
+
+					// Set the Revision to nil since we can't assert it's exact value.
+					endpoints.Items[0].Metadata.Revision = nil
+					Expect(endpoints.Items[0].Metadata).Should(Equal(api.WorkloadEndpointMetadata{
+						Node:             hostname,
+						Name:             "eth0",
+						Workload:         fmt.Sprintf("test.%s", name),
+						ActiveInstanceID: containerID,
+						Orchestrator:     "k8s",
+						Labels:           map[string]string{"calico/k8s_ns": "test"},
+					}))
+					Expect(endpoints.Items[0].Spec).Should(Equal(api.WorkloadEndpointSpec{
+						InterfaceName: interfaceName,
+						IPNetworks: []cnet.IPNet{{net.IPNet{
+							IP:   requestedIP,
+							Mask: net.CIDRMask(32, 32),
+						}}},
+						MAC:      &cnet.MAC{HardwareAddr: mac},
+						Profiles: []string{"k8s_ns.test"},
+					}))
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
+			Context("specify an IPv6 pool in the CNI config", func() {
+				It("pod should get an IPv6 address from that IP Pool", func() {
+					ipv6pool := "2001::2/120"
+					netconfCalicoIPAM := fmt.Sprintf(`
+						{
+						"cniVersion": "%s",
+						"name": "net14",
+						"type": "calico",
+						"etcd_endpoints": "http://%s:2379",
+						"ipam": {
+							"type": "calico-ipam",
+							"ipv6_pools": ["%s"],
+							"assign_ipv4": "false",
+							"assign_ipv6": "true"
+							},
+						"kubernetes": {
+							  "k8s_api_root": "http://127.0.0.1:8080"
+							 },
+						"policy": {"type": "k8s"},
+						"log_level":"info"
+						}`, cniVersion, os.Getenv("ETCD_IP"), ipv6pool)
+
+					// Create a new ipPool.
+					c, _ := client.NewFromEnv()
+
+					// Create the IP Pool specified in the CNI config.
+					testutils.CreateNewIPPool(*c, ipv6pool, false, false, true)
+
+					_, ipPoolCIDR, err := net.ParseCIDR(ipv6pool)
+					Expect(err).NotTo(HaveOccurred())
+
+					config, err := clientcmd.DefaultClientConfig.ClientConfig()
+					Expect(err).NotTo(HaveOccurred())
+
+					clientset, err := kubernetes.NewForConfig(config)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Now create a K8s pod passing in more than one IPv4 address.
+					name := fmt.Sprintf("run%d-ip", rand.Uint32())
+					pod, err := clientset.Pods(K8S_TEST_NS).Create(&v1.Pod{
+						ObjectMeta: v1.ObjectMeta{
+							Name: name,
+						},
+						Spec: v1.PodSpec{Containers: []v1.Container{{
+							Name:  fmt.Sprintf("container-%s", name),
+							Image: "ignore",
+						}}},
+					})
+					Expect(err).NotTo(HaveOccurred())
+
+					logger.Infof("Created POD object: %v", pod)
+
+					_, netnspath, _, _, contAddresses, _, _, err := CreateContainer(netconfCalicoIPAM, name, "")
+					Expect(err).NotTo(HaveOccurred())
+
+					podIP := contAddresses[0].IP
+					logger.Infof("All container IPs: %v", contAddresses)
+					logger.Infof("Container got IP address: %s", podIP)
+
+					// Pod should have gotten an IP from the second IP Pool.
+					Expect(ipPoolCIDR.Contains(podIP)).To(BeTrue())
+
+					// Delete the container.
+					_, err = DeleteContainer(netconfCalicoIPAM, netnspath, name)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
 		})
 	})
 })
