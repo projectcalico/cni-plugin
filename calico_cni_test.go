@@ -64,7 +64,7 @@ var _ = Describe("CalicoCni", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("successfully networks the namespace", func() {
-				containerID, netnspath, session, contVeth, contAddresses, contRoutes, _, err := CreateContainer(netconf, "", "")
+				containerID, netnspath, session, contVeth, contAddresses, _, contRoutes, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
@@ -190,7 +190,7 @@ var _ = Describe("CalicoCni", func() {
 					if err := CreateHostVeth(container_id, "", ""); err != nil {
 						panic(err)
 					}
-					_, netnspath, session, _, _, _, _, err := CreateContainerWithId(netconf, "", "", container_id)
+					_, netnspath, session, _, _, _, _, _, err := CreateContainerWithId(netconf, "", "", container_id)
 					Expect(err).ShouldNot(HaveOccurred())
 					Eventually(session).Should(gexec.Exit(0))
 
@@ -217,7 +217,7 @@ var _ = Describe("CalicoCni", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("has hostname even though deprecated", func() {
-				containerID, netnspath, session, _, _, _, _, err := CreateContainer(netconf, "", "")
+				containerID, netnspath, session, _, _, _, _, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
@@ -266,7 +266,7 @@ var _ = Describe("CalicoCni", func() {
 			}`, cniVersion, os.Getenv("ETCD_IP"))
 
 			It("nodename takes precedence over hostname", func() {
-				containerID, netnspath, session, _, _, _, _, err := CreateContainer(netconf, "", "")
+				containerID, netnspath, session, _, _, _, _, _, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
@@ -348,7 +348,7 @@ var _ = Describe("CalicoCni", func() {
 
 			It("should successfully execute both ADDs but for second ADD will return the same result as the first time but it won't network the pod", func() {
 
-				containerID, netnspath, session, _, _, _, contNs, err := CreateContainer(netconf, "", "")
+				containerID, netnspath, session, _, _, _, _, contNs, err := CreateContainer(netconf, "", "")
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
@@ -375,7 +375,7 @@ var _ = Describe("CalicoCni", func() {
 				}))
 
 				// Try to create the same container (so CNI receives the ADD for the same endpoint again)
-				session, _, _, _, err = RunCNIPluginWithId(netconf, "", "", netnspath, containerID, contNs)
+				session, _, _, _, _, err = RunCNIPluginWithId(netconf, "", "", netnspath, containerID, contNs)
 				Expect(err).ShouldNot(HaveOccurred())
 				Eventually(session).Should(gexec.Exit())
 
