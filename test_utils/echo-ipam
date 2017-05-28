@@ -1,0 +1,35 @@
+#!/bin/sh
+
+# A mock IPAM plugin which just echos back what it was given.
+# It stores fake IP allocations as files on disk so we can track if 
+# the plugin is being called at the correct times.
+
+set +u +e
+# Name the file based off of the provided container ID.
+mkdir -p .echo-ipam-tmp
+ipFile=.echo-ipam-tmp/$CNI_CONTAINERID
+
+if [ $CNI_COMMAND == "DEL" ]
+then
+	# Delete the file.
+	rm $ipFile
+elif [ $CNI_COMMAND == "ADD" ]
+then
+	# Ensure that the file doesn't exist.
+	if [ -e $ipFile ]; then echo "{\"msg\": \"An IP allocation already exists\"}"; exit 1; fi
+
+	# Otherwise, ensure the file exists.
+	touch $ipFile
+else
+	# An invalid CNI_COMMAND was provided.
+	echo "{\"msg\": \"Invalid command: $CNI_COMMAND\"}"
+	exit 1
+fi
+
+set -u -e
+
+# Echo back the provided config as our result.
+while read line
+do
+	echo $line
+done
