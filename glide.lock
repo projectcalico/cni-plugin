@@ -1,5 +1,5 @@
-hash: 890456c01bc942c84f98590226f3249650bf3fcba9391bf7945dcd2b5d2368a4
-updated: 2017-05-19T13:00:45.750747671-07:00
+hash: 3f2795f4becaab651ae45df3703b4e248fc43b18cba8cdaf803d3c7a6a7b6ae1
+updated: 2017-05-26T16:28:26.417572549-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -22,14 +22,15 @@ imports:
   - pkg/utils/hwaddr
   - pkg/version
 - name: github.com/coreos/etcd
-  version: ac1c7eba21545c4ee025f2c340e143cacb53c754
+  version: e42d5174efc275de61165f48cab1a536d2f4faff
   subpackages:
   - client
-  - pkg/fileutil
   - pkg/pathutil
+  - pkg/srv
   - pkg/tlsutil
   - pkg/transport
   - pkg/types
+  - version
 - name: github.com/coreos/go-iptables
   version: fbb73372b87f6e89951c2b6b31470c2c9d5cfae3
   subpackages:
@@ -42,15 +43,13 @@ imports:
   - key
   - oauth2
   - oidc
-- name: github.com/coreos/go-systemd
-  version: 2688e91251d9d8e404e86dd8f096e23b2f086958
+- name: github.com/coreos/go-semver
+  version: 568e959cd89871e61434c1143528d9162da89ef2
   subpackages:
-  - activation
-  - journal
+  - semver
 - name: github.com/coreos/pkg
   version: fa29b1d70f0beaddd4c7021607cc3c3be8ce94b8
   subpackages:
-  - capnslog
   - health
   - httputil
   - timeutil
@@ -100,7 +99,7 @@ imports:
 - name: github.com/juju/ratelimit
   version: 77ed1c8a01217656d2080ad51981f6e99adaa177
 - name: github.com/kelseyhightower/envconfig
-  version: 5c008110b20b657eb7e005b83d0a5f6aa6bb5f4b
+  version: 70f0258d44cbaa3b6a2581d82f58da01a38e4de4
 - name: github.com/mailru/easyjson
   version: d5b7844b561a7bc640052f1b935f7b800330d7e0
   subpackages:
@@ -154,8 +153,7 @@ imports:
 - name: github.com/projectcalico/go-yaml-wrapper
   version: 598e54215bee41a19677faa4f0c32acd2a87eb56
 - name: github.com/projectcalico/libcalico-go
-  version: d33edac617bb83da363b847ec1ac373c7bdd6940
-  repo: git@github.com:gunjan5/libcalico-go.git
+  version: 522f83ab1747983ce6484f5435661d93eaedd19d
   subpackages:
   - lib/api
   - lib/api/unversioned
@@ -185,9 +183,9 @@ imports:
 - name: github.com/PuerkitoBio/urlesc
   version: 5bd2802263f21d8788851d5305584c82a5c75d7e
 - name: github.com/satori/go.uuid
-  version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+  version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/Sirupsen/logrus
-  version: c078b1e43f58d563c74cebe63c85789e76ddb627
+  version: 5e5dc898656f695e2a086b8e12559febbfc01562
 - name: github.com/spf13/pflag
   version: 5ccb023bc27df288a957c5e994cd44fd19619465
 - name: github.com/ugorji/go
@@ -221,7 +219,7 @@ imports:
   - jws
   - jwt
 - name: golang.org/x/sys
-  version: 076b546753157f758b316e59bcb51e6807c04057
+  version: a55a76086885b80f79961eacb876ebd8caf3868d
   subpackages:
   - unix
 - name: golang.org/x/text
