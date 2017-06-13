@@ -15,7 +15,7 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: 522f83ab1747983ce6484f5435661d93eaedd19d
+  version: 1.4.4
   subpackages:
   - lib/api
   - lib/client
@@ -23,6 +23,7 @@ import:
   - lib/net
 - package: github.com/vishvananda/netlink
 - package: k8s.io/client-go
+  version: 4a3ab2f5be5177366f8206fd79ce55ca80e417fa
   subpackages:
   - kubernetes
   - tools/clientcmd
