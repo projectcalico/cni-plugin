@@ -11,8 +11,8 @@ import (
 	"os/exec"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"path"
@@ -22,6 +22,7 @@ import (
 	"syscall"
 
 	"bufio"
+
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
