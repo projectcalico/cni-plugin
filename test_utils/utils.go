@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -100,13 +100,13 @@ func WipeK8sPods() {
 	if err != nil {
 		panic(err)
 	}
-	pods, err := clientset.Pods(K8S_TEST_NS).List(v1.ListOptions{})
+	pods, err := clientset.Pods(K8S_TEST_NS).List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
 	for _, pod := range pods.Items {
-		err = clientset.Pods(K8S_TEST_NS).Delete(pod.Name, &v1.DeleteOptions{})
+		err = clientset.Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
 
 		if err != nil {
 			panic(err)
