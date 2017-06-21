@@ -11,8 +11,8 @@ import (
 	"os/exec"
 	"strings"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"path"
@@ -22,6 +22,7 @@ import (
 	"syscall"
 
 	"bufio"
+
 	"github.com/containernetworking/cni/pkg/ns"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
@@ -99,13 +100,13 @@ func WipeK8sPods() {
 	if err != nil {
 		panic(err)
 	}
-	pods, err := clientset.Pods(K8S_TEST_NS).List(v1.ListOptions{})
+	pods, err := clientset.Pods(K8S_TEST_NS).List(metav1.ListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
 	for _, pod := range pods.Items {
-		err = clientset.Pods(K8S_TEST_NS).Delete(pod.Name, &v1.DeleteOptions{})
+		err = clientset.Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
 
 		if err != nil {
 			panic(err)
@@ -190,26 +191,26 @@ func CreateContainerNamespaceWithCid(container_id string) (containerNs ns.NetNS,
 	return
 }
 
-func CreateContainer(netconf string, k8sName string, ip string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+func CreateContainer(netconf string, k8sName string, ip string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, v6Addrs []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	return CreateContainerWithId(netconf, k8sName, ip, "")
 }
 
 // Create container with the giving containerId when containerId is not empty
-func CreateContainerWithId(netconf string, k8sName string, ip string, containerId string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
+func CreateContainerWithId(netconf string, k8sName string, ip string, containerId string) (container_id, netnspath string, session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, v6Addrs []netlink.Addr, contRoutes []netlink.Route, targetNs ns.NetNS, err error) {
 	targetNs, container_id, netnspath, err = CreateContainerNamespaceWithCid(containerId)
 
 	if err != nil {
-		return "", "", nil, nil, nil, nil, nil, err
+		return "", "", nil, nil, nil, nil, nil, nil, err
 	}
 
-	session, contVeth, contAddr, contRoutes, err = RunCNIPluginWithId(netconf, k8sName, ip, netnspath, container_id, targetNs)
+	session, contVeth, contAddr, v6Addrs, contRoutes, err = RunCNIPluginWithId(netconf, k8sName, ip, netnspath, container_id, targetNs)
 
 	return
 }
 
 // RunCNIPluginWithId calls CNI plugin with a containerID and targetNs passed to it.
 // This is for when you want to call CNI for an existing container.
-func RunCNIPluginWithId(netconf string, k8sName string, ip string, netnspath, containerId string, targetNs ns.NetNS) (session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, contRoutes []netlink.Route, err error) {
+func RunCNIPluginWithId(netconf string, k8sName string, ip string, netnspath, containerId string, targetNs ns.NetNS) (session *gexec.Session, contVeth netlink.Link, contAddr []netlink.Addr, v6Addrs []netlink.Addr, contRoutes []netlink.Route, err error) {
 
 	// Set up the env for running the CNI plugin
 	//TODO pass in the env properly
@@ -246,6 +247,11 @@ func RunCNIPluginWithId(netconf string, k8sName string, ip string, netnspath, co
 		}
 
 		contAddr, err = netlink.AddrList(contVeth, syscall.AF_INET)
+		if err != nil {
+			return err
+		}
+
+		v6Addrs, err = netlink.AddrList(contVeth, netlink.FAMILY_V6)
 		if err != nil {
 			return err
 		}
