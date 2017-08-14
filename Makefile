@@ -9,8 +9,14 @@ LOCAL_IP_ENV?=$(shell ip route get 8.8.8.8 | head -1 | awk '{print $$7}')
 # fail if unable to download
 CURL=curl -sSf
 
+ARCH?=amd64
+
 K8S_VERSION=1.6.1
 CNI_VERSION=v0.5.2
+
+ifeq ($(ARCH), arm64) 
+CNI_VERSION=v0.6.0-rc1
+endif
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 
@@ -20,6 +26,15 @@ CNI_SPEC_VERSION?=0.3.1
 # Ensure that the dist directory is always created
 MAKE_SURE_DIST_EXIST := $(shell mkdir -p dist)
 CALICO_BUILD?=calico/go-build
+ETCD_IMG?=quay.io/coreos/etcd
+
+# Set docker image for arm64
+ifeq ($(ARCH), arm64)
+CALICO_BUILD=linaro/ci-aarch64-leg-go-build-alpine
+ETCD_IMG=linaro/ci-aarch64-leg-etcd
+endif
+
+
 DEPLOY_CONTAINER_NAME=calico/cni
 DEPLOY_CONTAINER_MARKER=cni_deploy_container.created
 
@@ -111,6 +126,7 @@ fetch-cni-bins: dist/flannel dist/loopback dist/host-local dist/portmap
 
 # For now we've got a checked in version of the plugin.  Eventually
 # this should pull from upstream releases.
+ifeq ($(ARCH), amd64) 
 dist/portmap:
 	mkdir -p dist
 	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.9.0/portmap -o $@
@@ -118,7 +134,15 @@ dist/portmap:
 
 dist/flannel dist/loopback dist/host-local:
 	mkdir -p dist
-	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/$(CNI_VERSION)/cni-amd64-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local
+	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/$(CNI_VERSION)/cni-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local
+endif
+
+ifeq ($(ARCH), arm64) 
+dist/flannel dist/loopback dist/host-local dist/portmap:
+	mkdir -p dist
+	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local ./portmap
+endif
+
 
 # Useful for CI but currently slow for local development because the
 # .go-pkg-cache can't be used (since tests run as root)
@@ -175,7 +199,7 @@ build-containerized: vendor
 run-etcd: stop-etcd
 	docker run --detach \
 	-p 2379:2379 \
-	--name calico-etcd quay.io/coreos/etcd \
+	--name calico-etcd $(ETCD_IMG) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -184,7 +208,7 @@ run-etcd: stop-etcd
 run-etcd-host: stop-etcd
 	docker run --detach \
 	--net=host \
-	--name calico-etcd quay.io/coreos/etcd \
+	--name calico-etcd $(ETCD_IMG) \
 	etcd \
 	--advertise-client-urls "http://$(LOCAL_IP_ENV):2379,http://127.0.0.1:2379,http://$(LOCAL_IP_ENV):4001,http://127.0.0.1:4001" \
 	--listen-client-urls "http://0.0.0.0:2379,http://0.0.0.0:4001"
@@ -197,7 +221,7 @@ stop-etcd:
 run-k8s-apiserver: stop-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-apiserver \
-  	gcr.io/google_containers/hyperkube-amd64:v$(K8S_VERSION) \
+  	gcr.io/google_containers/hyperkube-$(ARCH):v$(K8S_VERSION) \
 		  /hyperkube apiserver --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 		  --service-cluster-ip-range=10.101.0.0/16 
 
@@ -211,7 +235,7 @@ static-checks: vendor
 	docker run --rm \
 		-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
 		-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin \
-		calico/go-build sh -c '\
+		$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
 			gometalinter --deadline=300s --disable-all --enable=goimports --enable=vet --enable=errcheck --vendor -s test_utils ./...'
 
@@ -246,7 +270,7 @@ deploy-rkt: binary
 
 ## Run kubernetes master
 run-kubernetes-master: stop-kubernetes-master run-etcd-host binary 
-	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/amd64/kubectl
+	echo Get kubectl from http://storage.googleapis.com/kubernetes-release/release/v$(K8S_VERSION)/bin/linux/$(ARCH)/kubectl
 	mkdir -p net.d
 	#echo '{"name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "usePodCidr"}}' >net.d/10-calico.conf
 	#echo '{"log_level":"DEBUG", "name": "k8s","type": "calico","etcd_authority": "${LOCAL_IP_ENV}:2379", "kubernetes":{"node_name":"127.0.0.1"}, "policy": {"type": "k8s"},"ipam": {"type": "host-local", "subnet": "10.101.0.0/16"}}' >net.d/10-calico.conf
@@ -269,7 +293,7 @@ run-kubernetes-master: stop-kubernetes-master run-etcd-host binary
 		--privileged=true \
 		--name calico-kubelet-master \
 		-d \
-		gcr.io/google_containers/hyperkube-amd64:v${K8S_VERSION} \
+		gcr.io/google_containers/hyperkube-$(ARCH):v${K8S_VERSION} \
 		/hyperkube kubelet \
 			--containerized \
 			--hostname-override="127.0.0.1" \
