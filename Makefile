@@ -12,11 +12,7 @@ CURL=curl -sSf
 ARCH?=amd64
 
 K8S_VERSION=1.6.1
-CNI_VERSION=v0.5.2
-
-ifeq ($(ARCH), arm64) 
-CNI_VERSION=v0.6.0-rc1
-endif
+CNI_VERSION=v0.6.0
 
 CALICO_CNI_VERSION?=$(shell git describe --tags --dirty)
 
@@ -126,22 +122,10 @@ fetch-cni-bins: dist/flannel dist/loopback dist/host-local dist/portmap
 
 # For now we've got a checked in version of the plugin.  Eventually
 # this should pull from upstream releases.
-ifeq ($(ARCH), amd64) 
-dist/portmap:
-	mkdir -p dist
-	$(CURL) -L https://github.com/projectcalico/cni-plugin/releases/download/v1.9.0/portmap -o $@
-	chmod +x dist/portmap
 
-dist/flannel dist/loopback dist/host-local:
-	mkdir -p dist
-	$(CURL) -L --retry 5 https://github.com/containernetworking/cni/releases/download/$(CNI_VERSION)/cni-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local
-endif
-
-ifeq ($(ARCH), arm64) 
 dist/flannel dist/loopback dist/host-local dist/portmap:
 	mkdir -p dist
 	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/$(CNI_VERSION)/cni-plugins-$(ARCH)-$(CNI_VERSION).tgz | tar -xz -C dist ./flannel ./loopback ./host-local ./portmap
-endif
 
 
 # Useful for CI but currently slow for local development because the
