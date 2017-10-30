@@ -285,6 +285,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	endpoint.Spec.ContainerID = epIDs.ContainerID
 	logger.WithField("endpoint", endpoint).Info("Added Mac, interface name, and active container ID to endpoint")
 
+	if conf.DatastoreType == "kubernetes" {
+		logger.Info("Using Kubernetes as the datastore, skipping endpoint write.")
+		return result, nil
+	}
+
 	// Write the endpoint object (either the newly created one, or the updated one)
 	if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
 		// Cleanup IP allocation and return the error.
