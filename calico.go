@@ -316,9 +316,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			fmt.Fprintf(os.Stderr, "Calico CNI creating profile: %s\n", conf.Name)
 			var inboundRules []api.Rule
 			if wepIDs.Orchestrator == "k8s" {
-				inboundRules = []api.Rule{{Action: "allow"}}
+				inboundRules = []api.Rule{{Action: "Allow"}}
 			} else {
-				inboundRules = []api.Rule{{Action: "allow", Source: api.EntityRule{Selector: fmt.Sprintf("has(%s)", conf.Name)}}}
+				inboundRules = []api.Rule{{Action: "Allow", Source: api.EntityRule{Selector: fmt.Sprintf("has(%s)", conf.Name)}}}
 			}
 
 			profile := &api.Profile{
@@ -327,7 +327,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 					Labels: map[string]string{conf.Name: ""},
 				},
 				Spec: api.ProfileSpec{
-					Egress:        []api.Rule{{Action: "allow"}},
+					Egress:        []api.Rule{{Action: "Allow"}},
 					Ingress:       inboundRules,
 					LabelsToApply: map[string]string{conf.Name: ""},
 				},
