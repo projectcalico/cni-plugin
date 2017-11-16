@@ -320,7 +320,7 @@ var _ = Describe("CalicoCni", func() {
 						Orchestrator:  "k8s",
 						Ports: []api.EndpointPort{{
 							Name:     "anamedport",
-							Protocol: numorstring.ProtocolFromString("tcp"),
+							Protocol: numorstring.ProtocolFromString("TCP"),
 							Port:     555,
 						}},
 					}))
