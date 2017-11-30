@@ -20,7 +20,8 @@ import:
   subpackages:
   - gexec
 - package: github.com/projectcalico/libcalico-go
-  version: master
+  version: pod-ip-annotation
+  repo: https://github.com/fasaxc/libcalico-go.git
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
