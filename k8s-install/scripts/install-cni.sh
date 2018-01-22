@@ -168,8 +168,8 @@ while [ "$should_sleep" == "true"  ]; do
 	current_stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
 	if [ "$old_stat_output" != "$current_output" ]; then
 		old_stat_output=$current_stat_output
-        echo "Updating installed secrets at: $(date)"
-        cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
-    fi
+		echo "Updating installed secrets at: $(date)"
+		cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
+	fi
 	sleep 10
 done
