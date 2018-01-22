@@ -42,6 +42,7 @@ func runCniContainer(extraArgs ...string) error {
 		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
 		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
 		"-v", cwd + "/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
+		"-v", cwd + "/tmp/etcd-cert:/calico-secrets/etcd-cert",
 	}
 	args = append(args, extraArgs...)
 	image := fmt.Sprintf("%s", os.Getenv("DEPLOY_CONTAINER_NAME"))
@@ -67,6 +68,7 @@ func cleanup() {
 		"-v", cwd+"/tmp/bin:/host/opt/cni/bin",
 		"-v", cwd+"/tmp/net.d:/host/etc/cni/net.d",
 		"-v", cwd+"/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
+		"-v", cwd+"/tmp/etcd-cert:/calico-secrets/etcd-cert",
 		fmt.Sprintf("%s", os.Getenv("DEPLOY_CONTAINER_NAME")),
 		"sh", "-c", "rm -f /host/opt/cni/bin/* /host/etc/cni/net.d/*").CombinedOutput()
 
@@ -88,6 +90,10 @@ var _ = BeforeSuite(func() {
 	err = os.MkdirAll("tmp/serviceaccount", 0755)
 	if err != nil {
 		Fail("Failed to create directory tmp/serviceaccount")
+	}
+	err = os.MkdirAll("tmp/etcd-cert", 0755)
+	if err != nil {
+		Fail("Failed to create directory tmp/etcd-cert")
 	}
 	cleanup()
 
