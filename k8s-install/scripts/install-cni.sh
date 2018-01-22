@@ -166,7 +166,7 @@ while [ "$should_sleep" == "true"  ]; do
 	# version to the host. Just check the timestamp on the certificate to see if it
 	# has been updated.  A bit hokey, but likely good enough.
 	current_stat_output=$(stat -c%y ${SECRETS_MOUNT_DIR}/etcd-cert 2>/dev/null)
-	if [ "$old_stat_output" != "$current_output" ]; then
+	if [ "$old_stat_output" != "$current_stat_output" ]; then
 		old_stat_output=$current_stat_output
 		echo "Updating installed secrets at: $(date)"
 		cp ${SECRETS_MOUNT_DIR}/* /host/etc/cni/net.d/calico-tls/
