@@ -24,7 +24,7 @@ import:
 - package: github.com/prometheus/procfs
   version: f98634e408857669d61064b283c4cde240622865
 - package: github.com/projectcalico/libcalico-go
-  version: 26b83dc3ccceeff9312eaf339386e6599c89c63b
+  version: cdaa88541f981f2f889389c5214cafb529386fe8
   subpackages:
   - lib/apiconfig
   - lib/apis/v2
