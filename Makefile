@@ -161,6 +161,7 @@ test-containerized: run-etcd run-k8s-apiserver build-containerized $(DIST)/host-
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e ALPHA_FEATURES="serviceaccounts" \
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \
@@ -202,6 +203,7 @@ run-test-containerized-without-building: run-etcd run-k8s-apiserver
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
 	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e ALPHA_FEATURES="serviceaccounts" \
 	-v $(CURDIR):/go/src/github.com/projectcalico/cni-plugin:rw \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/github.com/projectcalico/cni-plugin && \

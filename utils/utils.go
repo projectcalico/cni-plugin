@@ -376,6 +376,13 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 			return nil, err
 		}
 	}
+
+	// Set Alpha Features flag if set
+	if conf.AlphaFeatures != "" {
+		if err := os.Setenv("ALPHA_FEATURES", conf.AlphaFeatures); err != nil {
+			return nil, err
+		}
+	}
 	logrus.Infof("Configured environment: %+v", os.Environ())
 
 	// Load the client config from the current environment.

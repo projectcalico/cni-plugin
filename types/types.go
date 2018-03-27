@@ -84,6 +84,7 @@ type NetConf struct {
 	EtcdKeyFile          string     `json:"etcd_key_file"`
 	EtcdCertFile         string     `json:"etcd_cert_file"`
 	EtcdCaCertFile       string     `json:"etcd_ca_cert_file"`
+	AlphaFeatures        string     `json:"alpha_features"`
 }
 
 // CNITestArgs is the CNI_ARGS used for test purposes.
