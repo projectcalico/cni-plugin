@@ -78,7 +78,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		if err != nil {
 			return nil, err
 		}
-		logger.WithField("client", client).Debug("Created Kubernetes client")
+		logger.WithField("client", client).Debug("Created Kubernetes clientset")
 
 		if conf.IPAM.Type == "host-local" && strings.EqualFold(conf.IPAM.Subnet, "usePodCidr") {
 			// We've been told to use the "host-local" IPAM plugin with the Kubernetes podCidr for this node.
@@ -108,11 +108,9 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		var ports []api.EndpointPort
 		var profiles []string
 
-		// Only attempt to fetch the labels and annotations from Kubernetes
-		// if the policy type has been set to "k8s". This allows users to
-		// run the plugin under Kubernetes without needing it to access the
-		// Kubernetes API
-		if conf.Policy.PolicyType == "k8s" {
+		// Only attempt to fetch the labels and annotations from Kubernetes if a kubeconfig has been
+		// provided. For compatibility with older configs, also check if the policyType has been set to "k8s".
+		if conf.Policy.PolicyType == "k8s" || conf.Kubernetes.Kubeconfig != "" {
 			var err error
 
 			labels, annot, ports, profiles, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)

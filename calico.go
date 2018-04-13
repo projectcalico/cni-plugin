@@ -54,6 +54,11 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	utils.ConfigureLogging(conf.LogLevel)
 
+	// Check for deprecated configuration options and log them out to the user.
+	if err = utils.CheckDeprecation(conf); err != nil {
+		return err
+	}
+
 	if !conf.NodenameFileOptional {
 		// Configured to wait for the nodename file - don't start until it exists.
 		if _, err := os.Stat("/var/lib/calico/nodename"); err != nil {
@@ -318,7 +323,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	// Handle profile creation - this is only done if there isn't a specific policy handler.
-	if conf.Policy.PolicyType == "" {
+	if conf.Policy.PolicyType == "" || conf.Kubernetes.Kubeconfig == "" {
 		logger.Debug("Handling profiles")
 		// Start by checking if the profile already exists. If it already exists then there is no work to do.
 		// The CNI plugin never updates a profile.

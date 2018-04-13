@@ -70,6 +70,49 @@ func DetermineNodename(conf types.NetConf) string {
 	return nodename
 }
 
+// CheckDeprecation checks the provided network config for deprecated options and logs appropriate warnings.
+// It returns an error if a completely unsupported deprecated option is set.
+func CheckDeprecation(conf types.NetConf) error {
+	// The Policy struct is deprecated in favor of other configuration options.
+	if conf.Policy.PolicyType != "" {
+		logrus.Warning("Network configuration option 'policy.type' is deprecated, k8s policy will be enabled if a kubeconfig is provided")
+	}
+	if conf.Policy.K8sAPIRoot != "" {
+		logrus.Warning("Network configuration option 'policy.k8s_api_root' is deprecated, use 'kubernetes.kubeconfig' instead")
+	}
+	if conf.Policy.K8sAuthToken != "" {
+		logrus.Warning("Network configuration option 'policy.k8s_auth_token' is deprecated, use 'kubernetes.kubeconfig' instead")
+	}
+	if conf.Policy.ClientCertificate != "" {
+		logrus.Warning("Network configuration option 'policy.k8s_client_certificate' is deprecated, use 'kubernetes.kubeconfig' instead")
+	}
+	if conf.Policy.ClientKey != "" {
+		logrus.Warning("Network configuration option 'policy.k8s_client_key' is deprecated, use 'kubernetes.kubeconfig' instead")
+	}
+	if conf.Policy.K8sCertificateAuthority != "" {
+		logrus.Warning("Network configuration option 'policy.k8s_certificate_authority' is deprecated, use 'kubernetes.kubeconfig' instead")
+	}
+
+	// The following options are completely deprecated and should return an error if specified.
+	if conf.Hostname != "" {
+		e := "Network configuration option 'hostname' is deprecated - use 'nodename' instead"
+		logrus.Error(e)
+		return fmt.Errorf(e)
+	}
+	if conf.EtcdScheme != "" {
+		e := "Network configuration option 'etcd_scheme' is deprecated - use 'etcd_endpoints' instead"
+		logrus.Error(e)
+		return fmt.Errorf(e)
+	}
+	if conf.EtcdAuthority != "" {
+		e := "Network configuration option 'etcd_authority' is deprecated - use 'etcd_endpoints' instead"
+		logrus.Error(e)
+		return fmt.Errorf(e)
+	}
+
+	return nil
+}
+
 // nodenameFromFile reads the /var/lib/calico/nodename file if it exists and
 // returns the nodename within.
 func nodenameFromFile() string {
@@ -324,18 +367,8 @@ func CreateClient(conf types.NetConf) (client.Interface, error) {
 
 	// Use the config file to override environment variables.
 	// These variables will be loaded into the client config.
-	if conf.EtcdAuthority != "" {
-		if err := os.Setenv("ETCD_AUTHORITY", conf.EtcdAuthority); err != nil {
-			return nil, err
-		}
-	}
 	if conf.EtcdEndpoints != "" {
 		if err := os.Setenv("ETCD_ENDPOINTS", conf.EtcdEndpoints); err != nil {
-			return nil, err
-		}
-	}
-	if conf.EtcdScheme != "" {
-		if err := os.Setenv("ETCD_SCHEME", conf.EtcdScheme); err != nil {
 			return nil, err
 		}
 	}
