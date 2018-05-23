@@ -79,18 +79,18 @@ type NetConf struct {
 	Nodename             string            `json:"nodename"`
 	NodenameFileOptional bool              `json:"nodename_file_optional"`
 	DatastoreType        string            `json:"datastore_type"`
-	EtcdEndpoints        string            `json:"etcd_endpoints"`
 	LogLevel             string            `json:"log_level"`
 	Policy               Policy            `json:"policy"`
 	Kubernetes           Kubernetes        `json:"kubernetes"`
 	FeatureControl       FeatureControl    `json:"feature_control"`
-	EtcdScheme           string            `json:"etcd_scheme"`
+	EtcdEndpoints        string            `json:"etcd_endpoints"`
 	EtcdKeyFile          string            `json:"etcd_key_file"`
 	EtcdCertFile         string            `json:"etcd_cert_file"`
 	EtcdCaCertFile       string            `json:"etcd_ca_cert_file"`
 	ContainerSettings    ContainerSettings `json:"container_settings,omitempty"`
 
 	// Options below here are deprecated.
+	EtcdScheme    string `json:"etcd_scheme"`
 	EtcdAuthority string `json:"etcd_authority"`
 	Hostname      string `json:"hostname"`
 }
