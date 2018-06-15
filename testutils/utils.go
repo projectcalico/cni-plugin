@@ -426,7 +426,6 @@ func DeleteContainerWithId(netconf, netnspath, podName, podNamespace, containerI
 		"CNI_COMMAND=DEL",
 		fmt.Sprintf("CNI_CONTAINERID=%s", container_id),
 		fmt.Sprintf("CNI_NETNS=%s", netnspath),
-		"CNI_IFNAME=" + ifaceName,
 		fmt.Sprintf("CNI_PATH=%s", os.Getenv("BIN")),
 		k8sEnv,
 	}
