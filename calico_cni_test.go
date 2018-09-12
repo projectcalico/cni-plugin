@@ -191,6 +191,21 @@ var _ = Describe("CalicoCni", func() {
 
 			})
 
+			Context("when container ID contains non-alpha characters", func() {
+				It("successfully networks the namespace", func() {
+					containerID := fmt.Sprintf("c_o_n-%d", rand.Uint32())
+					if err := testutils.CreateHostVeth(containerID, "", "", hostname); err != nil {
+						panic(err)
+					}
+					_, session, _, _, _, contNs, err := testutils.CreateContainerWithId(netconf, "", testutils.TEST_DEFAULT_NS, "", containerID)
+					Expect(err).ShouldNot(HaveOccurred())
+					Eventually(session).Should(gexec.Exit(0))
+
+					_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)
+					Expect(err).ShouldNot(HaveOccurred())
+				})
+			})
+
 			Context("when the same hostVeth exists", func() {
 				It("successfully networks the namespace", func() {
 					containerID := fmt.Sprintf("con%d", rand.Uint32())
