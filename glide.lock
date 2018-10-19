@@ -1,5 +1,5 @@
-hash: 952a87cca6bf58ceff909e1592f1295b85b288ba6bb394c086f681860663d2ff
-updated: 2018-10-19T10:17:36.239840441Z
+hash: ab56c053601dea0f08d722f3c393fe9ca5e661c55b9e737d1e7e35aabef8a465
+updated: 2018-10-19T12:54:37.818684852-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
@@ -198,9 +198,10 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 5b23715facdef1452016bae512489c3cdf82458c
+  version: 1cafe34db7fdec6022e17e00e1c1ea501022f3e4
   subpackages:
   - prometheus
+  - prometheus/internal
 - name: github.com/prometheus/client_model
   version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
@@ -234,15 +235,14 @@ imports:
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
-  version: 4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de
+  version: e90d6d0afc4c315a0d87a568ae68577cc15149a0
   subpackages:
   - context
   - context/ctxhttp
-  - http/httpguts
   - http2
   - http2/hpack
-  - idna
   - internal/timeseries
+  - lex/httplex
   - trace
 - name: golang.org/x/oauth2
   version: a6bd8cefa1811bd24b86f8902872e4e8225f74c4
@@ -256,19 +256,12 @@ imports:
   subpackages:
   - unix
   - windows
-- name: golang.org/x/text
-  version: b19bf474d317b857955b12035d2c5acb57ce8b01
-  subpackages:
-  - secure/bidirule
-  - transform
-  - unicode/bidi
-  - unicode/norm
 - name: golang.org/x/time
   version: f51c12702a4d776e4c1fa9b0fabab841babae631
   subpackages:
   - rate
 - name: google.golang.org/appengine
-  version: 4216e58b9158e5f1c906f1aca75162a46a2ec88a
+  version: ae0ab99deb4dc413a2b4bd6c8bdd0eb67f1e4d06
   subpackages:
   - internal
   - internal/app_identity

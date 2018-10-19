@@ -56,4 +56,4 @@ import:
 # A number of packages depend on x/net.  The GRPC version used by the CNI support libraries
 # needs a more recent version than the default that gets selected.
 - package: golang.org/x/net
-  version: 4dfa2610cdf3b287375bbba5b8f2a14d3b01d8de
+  version: e90d6d0afc4c315a0d87a568ae68577cc15149a0
