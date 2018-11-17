@@ -511,6 +511,21 @@ run-kube-proxy:
 	-docker rm -f calico-kube-proxy
 	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:$(K8S_VERSION) /hyperkube proxy --master=http://127.0.0.1:8080 --v=2
 
+## Simple helper for creating a cherry-pick PR. Requires the `hub` CLI tool.
+cherry-pick: cherry-pick-prereqs
+	-@rm -f cherry_pick_pull.sh
+	@wget https://raw.githubusercontent.com/kubernetes/kubernetes/master/hack/cherry_pick_pull.sh && \
+		chmod +x ./cherry_pick_pull.sh && \
+		UPSTREAM_REMOTE=origin ./cherry_pick_pull.sh $(TARGET_BRANCH) $(PR_NUMBER)
+
+cherry-pick-prereqs:
+ifndef TARGET_BRANCH 
+	$(error TARGET_BRANCH must be set)
+endif
+ifndef PR_NUMBER
+	$(error PR_NUMBER must be set)
+endif
+
 .PHONY: test-watch
 ## Run the unit tests, watching for changes.
 test-watch: $(BIN)/calico $(BIN)/calico-ipam run-etcd run-k8s-apiserver
