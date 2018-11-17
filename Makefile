@@ -133,6 +133,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 .PHONY: clean
 clean:
 	rm -rf $(BIN) bin/github vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -f *.created
 
 ###############################################################################
 # Building the binary
@@ -474,6 +475,14 @@ release-publish: release-prereqs
 
 	# Push images.
 	$(MAKE) push-all push-manifests push-non-manifests RELEASE=true IMAGETAG=$(VERSION)
+
+	# Push binaries to GitHub release.
+	# Requires ghr: https://github.com/tcnksm/ghr
+	# Requires GITHUB_TOKEN environment variable set.
+	ghr -r cni-plugin \
+		-b "Release notes can be found at https://docs.projectcalico.org" \
+		-n $(VERSION) \
+		$(VERSION) ./bin/github/
 
 	@echo "Finalize the GitHub release based on the pushed tag."
 	@echo "Attach all binaries in bin/github to the release."
