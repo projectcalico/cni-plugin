@@ -308,7 +308,8 @@ foss-checks: vendor
 # Unit Tests
 ###############################################################################
 ## Run the unit tests.
-ut: run-k8s-controller build $(BIN)/host-local
+ut: ut-etcd ut-kdd
+ut-etcd: run-k8s-controller build $(BIN)/host-local
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
@@ -317,7 +318,7 @@ ut: run-k8s-controller build $(BIN)/host-local
 	-e PLUGIN=calico \
 	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
-	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
+	-e DATASTORE_TYPE=etcdv3 \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	$(LOCAL_BUILD_MOUNTS) \
@@ -325,6 +326,27 @@ ut: run-k8s-controller build $(BIN)/host-local
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
 	make stop-etcd
+	make stop-k8s-controller
+
+ut-kdd: run-k8s-controller build $(BIN)/host-local
+	# The tests need to run as root
+	docker run --rm -t --privileged --net=host \
+	-e ETCD_IP=$(LOCAL_IP_ENV) \
+	-e LOCAL_USER_ID=0 \
+	-e ARCH=$(ARCH) \
+	-e PLUGIN=calico \
+	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
+	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
+	-e DATASTORE_TYPE=kubernetes \
+	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e K8S_API_ENDPOINT=http://127.0.0.1:8080 \
+	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	$(LOCAL_BUILD_MOUNTS) \
+	$(CALICO_BUILD) sh -c '\
+			cd  /go/src/$(PACKAGE_NAME) && \
+			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+	make stop-etcd
+	make stop-k8s-controller
 
 ## Run the tests in a container (as root) for different CNI spec versions
 ## to make sure we don't break backwards compatibility.
