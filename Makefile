@@ -329,6 +329,9 @@ ut-etcd: run-k8s-controller build $(BIN)/host-local
 	make stop-k8s-controller
 
 ut-kdd: run-k8s-controller build $(BIN)/host-local
+    # Need to sleep here to allow k8s apiserver to start
+	sleep 10
+	docker exec calico-k8s-controller kubectl apply -f /crds.yaml
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
@@ -372,6 +375,7 @@ run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
+	  -v `pwd`/vendor/github.com/projectcalico/libcalico-go/test/crds.yaml:/crds.yaml \
 	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 	  /hyperkube controller-manager \
 	    --master=127.0.0.1:8080 \

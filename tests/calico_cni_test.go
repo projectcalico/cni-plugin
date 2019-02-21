@@ -1,3 +1,5 @@
+// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+
 package main_test
 
 import (
@@ -30,7 +32,9 @@ var _ = Describe("CalicoCni", func() {
 	calicoClient, _ := client.NewFromEnv()
 
 	BeforeEach(func() {
-		testutils.WipeEtcd()
+		if os.Getenv("DATASTORE_TYPE") == "etcdv3" {
+			testutils.WipeEtcd()
+		}
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var err error
 		n := api.NewNode()

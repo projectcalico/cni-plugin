@@ -1,3 +1,5 @@
+// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+
 package main_test
 
 import (
@@ -25,7 +27,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 	calicoClient, _ := client.NewFromEnv()
 
 	BeforeEach(func() {
-		testutils.WipeEtcd()
+		if os.Getenv("DATASTORE_TYPE") == "etcdv3" {
+			testutils.WipeEtcd()
+		}
 		testutils.MustCreateNewIPPool(calicoClient, defaultIPv4Pool, false, false, true)
 		testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
 

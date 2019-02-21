@@ -1,3 +1,5 @@
+// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+
 package main_test
 
 import (
@@ -68,7 +70,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 	BeforeEach(func() {
 		testutils.WipeK8sPods()
-		testutils.WipeEtcd()
+		if os.Getenv("DATASTORE_TYPE") == "etcdv3" {
+			testutils.WipeEtcd()
+		}
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var err error
@@ -103,12 +107,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8080"
+			    "k8s_api_root": %s
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
 			  "log_level":"info"
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), os.Getenv("K8S_API_ENDPOINT"))
 
 		It("successfully networks the namespace", func() {
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
