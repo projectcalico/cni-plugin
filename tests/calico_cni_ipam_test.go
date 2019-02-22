@@ -11,12 +11,14 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var plugin = "calico-ipam"
@@ -24,21 +26,28 @@ var defaultIPv4Pool = "192.168.0.0/16"
 
 var _ = Describe("Calico IPAM Tests", func() {
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
-	calicoClient, _ := client.NewFromEnv()
-
+	calicoClient, err := client.NewFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	config, err := clientcmd.DefaultClientConfig.ClientConfig()
+	if err != nil {
+		panic(err)
+	}
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err)
+	}
 	BeforeEach(func() {
-		if os.Getenv("DATASTORE_TYPE") == "etcdv3" {
-			testutils.WipeEtcd()
-		}
+		testutils.WipeDatastore()
 		testutils.MustCreateNewIPPool(calicoClient, defaultIPv4Pool, false, false, true)
 		testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
-		var err error
-		n := v3.NewNode()
-		n.Name, err = names.Hostname()
+		var name string
+		name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
+		err = utils.ApplyNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

@@ -24,7 +24,6 @@ import (
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/types"
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -36,7 +35,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -67,19 +66,24 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	if err != nil {
 		panic(err)
 	}
+	config, err := clientcmd.DefaultClientConfig.ClientConfig()
+	if err != nil {
+		panic(err)
+	}
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err)
+	}
 
 	BeforeEach(func() {
 		testutils.WipeK8sPods()
-		if os.Getenv("DATASTORE_TYPE") == "etcdv3" {
-			testutils.WipeEtcd()
-		}
+		testutils.WipeDatastore()
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
-		var err error
-		n := v3.NewNode()
-		n.Name, err = names.Hostname()
+		var name string
+		name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
+		err = utils.ApplyNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
