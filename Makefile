@@ -126,8 +126,6 @@ endif
 
 LIBCALICOGO_PATH?=none
 
-DATASTORE_TYPE?=etcdv3
-
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
@@ -308,7 +306,10 @@ foss-checks: vendor
 # Unit Tests
 ###############################################################################
 ## Run the unit tests.
-ut: ut-etcd ut-kdd
+ut:
+	make ut-etcd
+	make ut-kdd
+
 ut-etcd: run-k8s-controller build $(BIN)/host-local
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
@@ -325,6 +326,8 @@ ut-etcd: run-k8s-controller build $(BIN)/host-local
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+	sudo mv ./report/azure_suite.xml ./report/azure_suite_etcd.xml
+	sudo mv ./report/cni_suite.xml ./report/cni_suite_etcd.xml
 	make stop-etcd
 	make stop-k8s-controller
 
@@ -348,6 +351,8 @@ ut-kdd: run-k8s-controller build $(BIN)/host-local
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+	sudo mv ./report/azure_suite.xml ./report/azure_suite_kdd.xml
+	sudo mv ./report/cni_suite.xml ./report/cni_suite_kdd.xml
 	make stop-etcd
 	make stop-k8s-controller
 
