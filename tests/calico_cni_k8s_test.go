@@ -83,7 +83,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		var name string
 		name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		err = utils.ApplyNode(calicoClient, k8sClient, name)
+		err = utils.AddNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -91,7 +91,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		// Delete the node.
 		name, err := names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		_, err = calicoClient.Nodes().Delete(context.Background(), name, options.DeleteOptions{})
+		err = utils.DeleteNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -111,12 +111,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			    "subnet": "10.0.0.0/8"
 			  },
 			  "kubernetes": {
-			    "k8s_api_root": %s
+			    "k8s_api_root": "http://127.0.0.1:8080"
 			  },
 			  "policy": {"type": "k8s"},
 			  "nodename_file_optional": true,
 			  "log_level":"info"
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), os.Getenv("K8S_API_ENDPOINT"))
+			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"))
 
 		It("successfully networks the namespace", func() {
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()

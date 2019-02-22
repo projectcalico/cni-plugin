@@ -50,7 +50,7 @@ var _ = Describe("CalicoCni", func() {
 		var name string
 		name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		err = utils.ApplyNode(calicoClient, k8sClient, name)
+		err = utils.AddNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

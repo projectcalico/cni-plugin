@@ -621,9 +621,9 @@ func ResolvePools(ctx context.Context, c client.Interface, pools []string, isv4 
 	return result, nil
 }
 
-func ApplyNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
-	if kc != nil {
-		// If a k8s clientset was provided, create the node in Kubernetes.
+func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
+	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+		// create the node in Kubernetes.
 		n := corev1.Node{
 			TypeMeta: metav1.TypeMeta{
 				Kind:       "Node",
@@ -651,4 +651,21 @@ func ApplyNode(c client.Interface, kc *kubernetes.Clientset, host string) error 
 		Expect(err).NotTo(HaveOccurred())
 	}
 	return nil
+}
+
+func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
+	var err error
+	err = nil
+	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+		// delete the node in Kubernetes.
+		err := kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
+		log.WithError(err).Info("node deleted")
+	} else {
+		// Otherwise, delete it in Calico.
+		n := api.NewNode()
+		n.Name = host
+		_, err = c.Nodes().Delete(context.Background(), host, options.DeleteOptions{})
+		log.WithError(err).Info("node deleted")
+	}
+	return err
 }
