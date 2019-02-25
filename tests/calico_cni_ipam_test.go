@@ -55,7 +55,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 		// Delete the node.
 		name, err := names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		_, err = calicoClient.Nodes().Delete(context.Background(), name, options.DeleteOptions{})
+		err = utils.DeleteNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

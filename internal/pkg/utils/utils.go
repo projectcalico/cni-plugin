@@ -28,7 +28,6 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
-	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
@@ -622,6 +621,8 @@ func ResolvePools(ctx context.Context, c client.Interface, pools []string, isv4 
 }
 
 func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
+	var err error
+	err = nil
 	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
 		// create the node in Kubernetes.
 		n := corev1.Node{
@@ -637,20 +638,16 @@ func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
 		if err != nil {
 			if kerrors.IsAlreadyExists(err) {
 				return nil
-			} else {
-				return err
 			}
 		}
 		log.WithField("node", newNode).WithError(err).Info("node applied")
 	} else {
 		// Otherwise, create it in Calico.
-		var err error
 		n := api.NewNode()
 		n.Name = host
 		_, err = c.Nodes().Create(context.Background(), n, options.SetOptions{})
-		Expect(err).NotTo(HaveOccurred())
 	}
-	return nil
+	return err
 }
 
 func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
