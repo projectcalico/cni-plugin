@@ -330,6 +330,9 @@ var _ = Describe("CalicoCni", func() {
 		  "name": "net1",
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
+		  "kubernetes": {
+		     "k8s_api_root": "http://127.0.0.1:8080"
+		  },
 		  "hostname": "named-hostname.somewhere",
 		  "nodename_file_optional": true,
 		  "datastore_type": "%s",
@@ -374,6 +377,9 @@ var _ = Describe("CalicoCni", func() {
 		  "name": "net1",
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
+		  "kubernetes": {
+		     "k8s_api_root": "http://127.0.0.1:8080"
+		  },
 		  "hostname": "named-hostname",
 		  "nodename": "named-nodename",
 		  "nodename_file_optional": true,
@@ -423,8 +429,11 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
+			  "kubernetes": {
+			    "k8s_api_root": "http://127.0.0.1:8080"
+			  },
 			  "hostname": "named-hostname.somewhere",
-		          "nodename_file_optional": true,
+			      "nodename_file_optional": true,
 			  "ipam": {
 				"type": "host-local",
 				"subnet": "10.0.0.0/8"
@@ -466,8 +475,11 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
+			  "kubernetes": {
+			    "k8s_api_root": "http://127.0.0.1:8080"
+			  },
 			  "hostname": "named-hostname.somewhere",
-		          "nodename_file_optional": true,
+			      "nodename_file_optional": true,
 			  "ipam": {
 				"type": "host-local",
 				"subnet": "10.0.0.0/8"
@@ -513,6 +525,9 @@ var _ = Describe("CalicoCni", func() {
 					"ip_addrs_no_ipam": true
 				},
 				"etcd_endpoints": "http://%s:2379",
+				"kubernetes": {
+				  "k8s_api_root": "http://127.0.0.1:8080"
+				},
 				"nodename": "named-nodename",
 				"nodename_file_optional": true,
 				"datastore_type": "%s",
@@ -537,9 +552,9 @@ var _ = Describe("CalicoCni", func() {
 			"name": "net1",
 			"type": "calico",
 			"etcd_endpoints": "http://%s:2379",
-		    "kubernetes": {
-	            "k8s_api_root": "http://127.0.0.1:8080"
-    		},
+			"kubernetes": {
+			  "k8s_api_root": "http://127.0.0.1:8080"
+			},
 			"nodename_file_optional": true,
 			"datastore_type": "%s",
 			"ipam": {
@@ -577,8 +592,8 @@ var _ = Describe("CalicoCni", func() {
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
 		  "kubernetes": {
-              "k8s_api_root": "http://127.0.0.1:8080"
-   		  },
+		      "k8s_api_root": "http://127.0.0.1:8080"
+		  },
 		  "datastore_type": "%s",
 		  "log_level": "info",
 	          "nodename_file_optional": true,
@@ -720,8 +735,8 @@ var _ = Describe("CalicoCni", func() {
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
 			  "kubernetes": {
-	              "k8s_api_root": "http://127.0.0.1:8080"
-    		  },
+			     "k8s_api_root": "http://127.0.0.1:8080"
+			  },
 			  "datastore_type": "%s",
 			  "ipam": {
 			    "type": "host-local",
@@ -738,7 +753,7 @@ var _ = Describe("CalicoCni", func() {
 				log.Printf("Unmarshalled result: %v\n", result)
 
 				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
-				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
+				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] // "cali" + containerID
 				hostVeth, err := netlink.LinkByName(hostVethName)
 				Expect(err).ToNot(HaveOccurred())
 
