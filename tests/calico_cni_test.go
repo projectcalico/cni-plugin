@@ -423,6 +423,9 @@ var _ = Describe("CalicoCni", func() {
 
 	Context("Mesos Labels", func() {
 		It("applies mesos labels", func() {
+			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+				Skip("Don't run mesos test with Kubernetes Datastore")
+			}
 			netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
@@ -469,6 +472,9 @@ var _ = Describe("CalicoCni", func() {
 		})
 
 		It("sanitizes dcos label", func() {
+			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+				Skip("Don't run DCOS test with Kubernetes Datastore")
+			}
 			netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
