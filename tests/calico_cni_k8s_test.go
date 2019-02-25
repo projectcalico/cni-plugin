@@ -37,6 +37,7 @@ import (
 	"github.com/vishvananda/netlink"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -727,6 +728,19 @@ var _ = Describe("Kubernetes CNI tests", func() {
 							PodCIDR: "10.0.0.0/24",
 						},
 					})
+					if err != nil {
+						if kerrors.IsAlreadyExists(err) {
+							err = nil
+							err := clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
+							log.WithError(err).Info("node deleted")
+							_, err = clientset.CoreV1().Nodes().Create(&v1.Node{
+								ObjectMeta: metav1.ObjectMeta{Name: hostname},
+								Spec: v1.NodeSpec{
+									PodCIDR: "10.0.0.0/24",
+								},
+							})
+						}
+					}
 					Expect(err).NotTo(HaveOccurred())
 					defer clientset.CoreV1().Nodes().Delete(hostname, &metav1.DeleteOptions{})
 
