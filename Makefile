@@ -325,7 +325,7 @@ ut-etcd: run-k8s-controller build $(BIN)/host-local
 	$(LOCAL_BUILD_MOUNTS) \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+			ginkgo -cover -r --failFast -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
 	sudo mv ./report/azure_suite.xml ./report/azure_suite_etcd.xml
 	sudo mv ./report/cni_suite.xml ./report/cni_suite_etcd.xml
 	make stop-etcd
@@ -350,7 +350,7 @@ ut-kdd: run-k8s-controller build $(BIN)/host-local
 	$(LOCAL_BUILD_MOUNTS) \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+			ginkgo -cover -r --failFast -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
 	sudo mv ./report/azure_suite.xml ./report/azure_suite_kdd.xml
 	sudo mv ./report/cni_suite.xml ./report/cni_suite_kdd.xml
 	make stop-etcd

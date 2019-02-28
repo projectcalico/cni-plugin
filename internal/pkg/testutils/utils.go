@@ -189,7 +189,7 @@ func WipeK8sPods() {
 	}
 
 	for _, pod := range pods.Items {
-		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(pod.Name, &metav1.DeleteOptions{})
+		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(pod.Name, metav1.NewDeleteOptions(0))
 
 		if err != nil {
 			if kerrors.IsNotFound(err) {
@@ -366,7 +366,7 @@ func RunCNIPluginWithId(
 	args := &cniArgs{env}
 
 	// Invoke the CNI plugin, returning any errors to the calling code to handle.
-	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
+	log.Printf("Calling CNI plugin with the following env vars: %v", env)
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 	r, err = invoke.ExecPluginWithResult(pluginPath, []byte(netconf), args, nil)
