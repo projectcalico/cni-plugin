@@ -108,11 +108,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	})
 
 	AfterEach(func() {
-		// Make sure workload has been cleaned up.
-		endpoints, err := calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
-		Expect(err).ShouldNot(HaveOccurred())
-		Expect(endpoints.Items).Should(HaveLen(0))
-
 		// Delete the node.
 		name, err := names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
