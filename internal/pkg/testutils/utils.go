@@ -26,11 +26,6 @@ import (
 	"strings"
 	"syscall"
 
-	kerrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-
 	"github.com/containernetworking/cni/pkg/invoke"
 	"github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/020"
@@ -170,34 +165,6 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 		return nil, err
 	}
 	return &r, nil
-}
-
-// Delete all K8s pods from the "test" namespace
-func WipeK8sPods() {
-	config, err := clientcmd.DefaultClientConfig.ClientConfig()
-	if err != nil {
-		panic(err)
-	}
-	clientset, err := kubernetes.NewForConfig(config)
-
-	if err != nil {
-		panic(err)
-	}
-	pods, err := clientset.CoreV1().Pods(K8S_TEST_NS).List(metav1.ListOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	for _, pod := range pods.Items {
-		err = clientset.CoreV1().Pods(K8S_TEST_NS).Delete(pod.Name, metav1.NewDeleteOptions(0))
-
-		if err != nil {
-			if kerrors.IsNotFound(err) {
-				continue
-			}
-			panic(err)
-		}
-	}
 }
 
 // RunIPAMPlugin sets ENV vars required then calls the IPAM plugin

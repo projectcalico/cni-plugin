@@ -96,7 +96,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	}
 
 	BeforeEach(func() {
-		// testutils.WipeK8sPods()
 		testutils.WipeDatastore()
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
