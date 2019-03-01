@@ -2077,6 +2077,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ExpectWithOffset(1, err).NotTo(HaveOccurred(), "error getting IPs")
 			ExpectWithOffset(1, ipamIPs).To(HaveLen(1),
 				"There should be an IPAM handle for endpoint")
+			Expect(endpointSpec.IPNetworks).To(HaveLen(1))
 			ExpectWithOffset(1, ipamIPs[0].String()+"/32").To(Equal(endpointSpec.IPNetworks[0]))
 		}
 
@@ -2149,8 +2150,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/serviceaccount": "default",
 			}))
 
+			endpointSpec = endpoints.Items[0].Spec
 			if os.Getenv("DATASTORE_TYPE") != "kubernetes" {
-				endpointSpec = endpoints.Items[0].Spec
 				Expect(endpointSpec.ContainerID).Should(Equal(containerID))
 			}
 			checkIPAMReservation()
@@ -2419,8 +2420,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				"projectcalico.org/serviceaccount": "default",
 			}))
 
-			// Assert this WEP has the new containerID for the second pod.
-			Expect(ep.Spec.ContainerID).Should(Equal(containerID2))
+			if os.Getenv("DATASTORE_TYPE") != "kubernetes" {
+				// Assert this WEP has the new containerID for the second pod.
+				Expect(ep.Spec.ContainerID).Should(Equal(containerID2))
+			}
 		})
 	})
 
@@ -2528,7 +2531,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(endpoints.Items).Should(HaveLen(1))
 
-
+			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+				// Unlike etcd datastore, WEP based on a kubernetes pod does not store values for mac/containerID.
+				// Put them back manually for later comparison.
+				endpoints.Items[0].Spec.ContainerID = containerID
+				endpoints.Items[0].Spec.MAC = mac.String()
+			}
 
 			Expect(endpoints.Items[0].Name).Should(Equal(wrkload))
 			Expect(endpoints.Items[0].Namespace).Should(Equal(testutils.K8S_TEST_NS))
@@ -2558,10 +2566,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			_, err = testutils.DeleteContainer(netconf, contNs.Path(), name, testutils.K8S_TEST_NS)
 			Expect(err).ShouldNot(HaveOccurred())
 
-			// Make sure there are no endpoints anymore
-			endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
-			Expect(err).ShouldNot(HaveOccurred())
-			Expect(endpoints.Items).Should(HaveLen(0))
+			if os.Getenv("DATASTORE_TYPE") != "kubernetes" {
+				// Make sure there are no endpoints anymore
+				endpoints, err = calicoClient.WorkloadEndpoints().List(ctx, options.ListOptions{})
+				Expect(err).ShouldNot(HaveOccurred())
+				Expect(endpoints.Items).Should(HaveLen(0))
+			}
 
 			// Make sure the interface has been removed from the namespace
 			targetNs, _ := ns.GetNS(contNs.Path())
