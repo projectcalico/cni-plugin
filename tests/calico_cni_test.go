@@ -24,56 +24,49 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 var _ = Describe("CalicoCni", func() {
 	hostname, _ := names.Hostname()
 	ctx := context.Background()
-	calicoClient, err := client.NewFromEnv()
-	if err != nil {
-		panic(err)
-	}
-	config, err := clientcmd.DefaultClientConfig.ClientConfig()
-	if err != nil {
-		panic(err)
-	}
-	k8sClient, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err)
-	}
-	BeforeEach(func() {
-		testutils.WipeDatastore()
+	calicoClient, _ := client.NewFromEnv()
 
+	BeforeEach(func() {
+		if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+			Skip("Don't run non-kubernetes test with Kubernetes Datastore")
+		}
+		testutils.WipeDatastore()
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
-		var name string
-		name, err = names.Hostname()
+		var err error
+		n := api.NewNode()
+		n.Name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		err = utils.AddNode(calicoClient, k8sClient, name)
+		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	AfterEach(func() {
+		if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+			// no cleanup needed.
+			return
+		}
+
 		// Delete the node.
 		name, err := names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		err = utils.DeleteNode(calicoClient, k8sClient, name)
+		_, err = calicoClient.Nodes().Delete(context.Background(), name, options.DeleteOptions{})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
 
-	Context("using host-local IPAM", func() {
+	Context("song using host-local IPAM", func() {
 		netconf := fmt.Sprintf(`
 		{
 		  "cniVersion": "%s",
 		  "name": "net1",
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
-		  "kubernetes": {
-              "k8s_api_root": "http://127.0.0.1:8080"
-   		  },
 		  "log_level": "info",
 		  "nodename_file_optional": true,
 		  "datastore_type": "%s",
@@ -134,8 +127,8 @@ var _ = Describe("CalicoCni", func() {
 			}))
 
 			// Routes and interface on host - there's is nothing to assert on the routes since felix adds those.
-			// fmt.Println(Cmd("ip link show")) // Useful for debugging
-			hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] // "cali" + containerID
+			//fmt.Println(Cmd("ip link show")) // Useful for debugging
+			hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
 
 			hostVeth, err := netlink.LinkByName(hostVethName)
 			Expect(err).ToNot(HaveOccurred())
@@ -285,9 +278,6 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "kubernetes": {
-	              "k8s_api_root": "http://127.0.0.1:8080"
-    		  },
 			  "log_level": "info",
 			  "nodename_file_optional": true,
 			  "datastore_type": "%s",
@@ -330,9 +320,6 @@ var _ = Describe("CalicoCni", func() {
 		  "name": "net1",
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
-		  "kubernetes": {
-		     "k8s_api_root": "http://127.0.0.1:8080"
-		  },
 		  "hostname": "named-hostname.somewhere",
 		  "nodename_file_optional": true,
 		  "datastore_type": "%s",
@@ -377,9 +364,6 @@ var _ = Describe("CalicoCni", func() {
 		  "name": "net1",
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
-		  "kubernetes": {
-		     "k8s_api_root": "http://127.0.0.1:8080"
-		  },
 		  "hostname": "named-hostname",
 		  "nodename": "named-nodename",
 		  "nodename_file_optional": true,
@@ -423,20 +407,14 @@ var _ = Describe("CalicoCni", func() {
 
 	Context("Mesos Labels", func() {
 		It("applies mesos labels", func() {
-			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				Skip("Don't run mesos test with Kubernetes Datastore")
-			}
 			netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8080"
-			  },
 			  "hostname": "named-hostname.somewhere",
-			      "nodename_file_optional": true,
+		          "nodename_file_optional": true,
 			  "ipam": {
 				"type": "host-local",
 				"subnet": "10.0.0.0/8"
@@ -472,20 +450,14 @@ var _ = Describe("CalicoCni", func() {
 		})
 
 		It("sanitizes dcos label", func() {
-			if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
-				Skip("Don't run DCOS test with Kubernetes Datastore")
-			}
 			netconf := fmt.Sprintf(`
 			{
 			  "cniVersion": "%s",
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "kubernetes": {
-			    "k8s_api_root": "http://127.0.0.1:8080"
-			  },
 			  "hostname": "named-hostname.somewhere",
-			      "nodename_file_optional": true,
+		          "nodename_file_optional": true,
 			  "ipam": {
 				"type": "host-local",
 				"subnet": "10.0.0.0/8"
@@ -531,9 +503,6 @@ var _ = Describe("CalicoCni", func() {
 					"ip_addrs_no_ipam": true
 				},
 				"etcd_endpoints": "http://%s:2379",
-				"kubernetes": {
-				  "k8s_api_root": "http://127.0.0.1:8080"
-				},
 				"nodename": "named-nodename",
 				"nodename_file_optional": true,
 				"datastore_type": "%s",
@@ -558,9 +527,6 @@ var _ = Describe("CalicoCni", func() {
 			"name": "net1",
 			"type": "calico",
 			"etcd_endpoints": "http://%s:2379",
-			"kubernetes": {
-			  "k8s_api_root": "http://127.0.0.1:8080"
-			},
 			"nodename_file_optional": true,
 			"datastore_type": "%s",
 			"ipam": {
@@ -597,9 +563,6 @@ var _ = Describe("CalicoCni", func() {
 		  "name": "net1",
 		  "type": "calico",
 		  "etcd_endpoints": "http://%s:2379",
-		  "kubernetes": {
-		      "k8s_api_root": "http://127.0.0.1:8080"
-		  },
 		  "datastore_type": "%s",
 		  "log_level": "info",
 	          "nodename_file_optional": true,
@@ -740,9 +703,6 @@ var _ = Describe("CalicoCni", func() {
 			  "name": "net1",
 			  "type": "calico",
 			  "etcd_endpoints": "http://%s:2379",
-			  "kubernetes": {
-			     "k8s_api_root": "http://127.0.0.1:8080"
-			  },
 			  "datastore_type": "%s",
 			  "ipam": {
 			    "type": "host-local",
@@ -759,7 +719,7 @@ var _ = Describe("CalicoCni", func() {
 				log.Printf("Unmarshalled result: %v\n", result)
 
 				// CNI plugin generates host side vEth name from containerID if used for "cni" orchestrator.
-				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] // "cali" + containerID
+				hostVethName := "cali" + containerID[:utils.Min(11, len(containerID))] //"cali" + containerID
 				hostVeth, err := netlink.LinkByName(hostVethName)
 				Expect(err).ToNot(HaveOccurred())
 
