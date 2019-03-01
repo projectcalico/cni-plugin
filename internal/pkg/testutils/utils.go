@@ -333,7 +333,7 @@ func RunCNIPluginWithId(
 	args := &cniArgs{env}
 
 	// Invoke the CNI plugin, returning any errors to the calling code to handle.
-	log.Printf("Calling CNI plugin with the following env vars: %v", env)
+	log.Debugf("Calling CNI plugin with the following env vars: %v", env)
 	var r types.Result
 	pluginPath := fmt.Sprintf("%s/%s", os.Getenv("BIN"), os.Getenv("PLUGIN"))
 	r, err = invoke.ExecPluginWithResult(pluginPath, []byte(netconf), args, nil)

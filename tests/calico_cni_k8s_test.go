@@ -944,7 +944,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Now create a K8s pod.
-			name = fmt.Sprintf("song-run%d", rand.Uint32())
+			name = fmt.Sprintf("run%d", rand.Uint32())
 			pod, err := clientset.CoreV1().Pods(testNS).Create(&v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        name,
@@ -959,7 +959,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			log.Infof("\n\n---- song-Created POD object: %v", pod)
 
 			_, _, _, contAddresses, _, contNs, err := testutils.CreateContainer(netconf, name, testNS, "")
 			Expect(err).NotTo(HaveOccurred())
