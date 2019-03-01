@@ -945,7 +945,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 			// Now create a K8s pod.
 			name = fmt.Sprintf("run%d", rand.Uint32())
-			pod, err := clientset.CoreV1().Pods(testNS).Create(&v1.Pod{
+			_, err := clientset.CoreV1().Pods(testNS).Create(&v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        name,
 					Annotations: map[string]string{},
