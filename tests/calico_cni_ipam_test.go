@@ -1,3 +1,5 @@
+// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
+
 package main_test
 
 import (
@@ -9,12 +11,14 @@ import (
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
-	"github.com/projectcalico/libcalico-go/lib/apis/v3"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var plugin = "calico-ipam"
@@ -22,19 +26,28 @@ var defaultIPv4Pool = "192.168.0.0/16"
 
 var _ = Describe("Calico IPAM Tests", func() {
 	cniVersion := os.Getenv("CNI_SPEC_VERSION")
-	calicoClient, _ := client.NewFromEnv()
-
+	calicoClient, err := client.NewFromEnv()
+	if err != nil {
+		panic(err)
+	}
+	config, err := clientcmd.DefaultClientConfig.ClientConfig()
+	if err != nil {
+		panic(err)
+	}
+	k8sClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err)
+	}
 	BeforeEach(func() {
-		testutils.WipeEtcd()
+		testutils.WipeDatastore()
 		testutils.MustCreateNewIPPool(calicoClient, defaultIPv4Pool, false, false, true)
 		testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
-		var err error
-		n := v3.NewNode()
-		n.Name, err = names.Hostname()
+		var name string
+		name, err = names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		_, err = calicoClient.Nodes().Create(context.Background(), n, options.SetOptions{})
+		err = utils.AddNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -42,7 +55,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 		// Delete the node.
 		name, err := names.Hostname()
 		Expect(err).NotTo(HaveOccurred())
-		_, err = calicoClient.Nodes().Delete(context.Background(), name, options.DeleteOptions{})
+		err = utils.DeleteNode(calicoClient, k8sClient, name)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -74,56 +87,68 @@ var _ = Describe("Calico IPAM Tests", func() {
 					Expect(exitCode).Should(Equal(0))
 				},
 				Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
-			{
-			  "cniVersion": "%s",
-			  "name": "net1",
-			  "type": "calico",
-			  "etcd_endpoints": "http://%s:2379",
-			  "log_level": "debug",
-			  "datastore_type": "%s",
-			  "ipam": {
-			    "type": "%s"
-			  }
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
+            {
+              "cniVersion": "%s",
+              "name": "net1",
+              "type": "calico",
+              "etcd_endpoints": "http://%s:2379",
+              "kubernetes": {
+                  "k8s_api_root": "http://127.0.0.1:8080"
+              },
+              "log_level": "debug",
+              "datastore_type": "%s",
+              "ipam": {
+                "type": "%s"
+              }
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
 				Entry("IPAM with IPv4 (explicit)", true, false, fmt.Sprintf(`
-			{
-			  "cniVersion": "%s",
-			  "name": "net1",
-			  "type": "calico",
-			  "etcd_endpoints": "http://%s:2379",
-			  "datastore_type": "%s",
-			  "ipam": {
-			    "type": "%s",
-			    "assign_ipv4": "true"
-			  }
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
+            {
+              "cniVersion": "%s",
+              "name": "net1",
+              "type": "calico",
+              "etcd_endpoints": "http://%s:2379",
+              "kubernetes": {
+                 "k8s_api_root": "http://127.0.0.1:8080"
+                  },
+              "datastore_type": "%s",
+              "ipam": {
+                "type": "%s",
+                "assign_ipv4": "true"
+              }
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
 				Entry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
-			{
-			  "cniVersion": "%s",
-			  "name": "net1",
-			  "type": "calico",
-			  "etcd_endpoints": "http://%s:2379",
-			  "datastore_type": "%s",
-			  "ipam": {
-			    "type": "%s",
-			    "assign_ipv4": "false",
-			    "assign_ipv6": "true"
-			  }
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
+            {
+              "cniVersion": "%s",
+              "name": "net1",
+              "type": "calico",
+              "etcd_endpoints": "http://%s:2379",
+              "kubernetes": {
+                 "k8s_api_root": "http://127.0.0.1:8080"
+              },
+              "datastore_type": "%s",
+              "ipam": {
+                "type": "%s",
+                "assign_ipv4": "false",
+                "assign_ipv6": "true"
+              }
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
 				Entry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
-			{
-			  "cniVersion": "%s",
-			  "name": "net1",
-			  "type": "calico",
-			  "etcd_endpoints": "http://%s:2379",
-			  "datastore_type": "%s",
-			  "log_level": "debug",
-			  "ipam": {
-			    "type": "%s",
-			    "assign_ipv4": "true",
-			    "assign_ipv6": "true"
-			  }
-			}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
+            {
+              "cniVersion": "%s",
+              "name": "net1",
+              "type": "calico",
+              "etcd_endpoints": "http://%s:2379",
+              "kubernetes": {
+                 "k8s_api_root": "http://127.0.0.1:8080"
+              },
+              "datastore_type": "%s",
+              "log_level": "debug",
+              "ipam": {
+                "type": "%s",
+                "assign_ipv4": "true",
+                "assign_ipv6": "true"
+              }
+            }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
 			)
 		})
 	})
@@ -137,7 +162,10 @@ var _ = Describe("Calico IPAM Tests", func() {
                   "name": "net1",
                   "type": "calico",
                   "etcd_endpoints": "http://%s:2379",
-			  "datastore_type": "%s",
+                  "kubernetes": {
+                    "k8s_api_root": "http://127.0.0.1:8080"
+                    },
+                  "datastore_type": "%s",
                   "ipam": {
                     "type": "%s",
                     "assign_ipv4": "true",
@@ -159,7 +187,10 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "name": "net1",
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
-			          "datastore_type": "%s",
+                        "kubernetes": {
+                           "k8s_api_root": "http://127.0.0.1:8080"
+                      },
+                      "datastore_type": "%s",
                       "ipam": {
                         "type": "%s",
                         "assign_ipv4": "true",
@@ -179,7 +210,10 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "name": "net1",
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
-			          "datastore_type": "%s",
+                        "kubernetes": {
+                         "k8s_api_root": "http://127.0.0.1:8080"
+                      },
+                      "datastore_type": "%s",
                       "ipam": {
                         "type": "%s",
                         "assign_ipv4": "true"
@@ -224,7 +258,10 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "name": "net1",
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
-			          "datastore_type": "%s",
+                        "kubernetes": {
+                         "k8s_api_root": "http://127.0.0.1:8080"
+                      },
+                      "datastore_type": "%s",
                       "ipam": {
                         "type": "%s",
                         "assign_ipv4": "true",
@@ -243,7 +280,10 @@ var _ = Describe("Calico IPAM Tests", func() {
                       "name": "net1",
                       "type": "calico",
                       "etcd_endpoints": "http://%s:2379",
-			          "datastore_type": "%s",
+                        "kubernetes": {
+                         "k8s_api_root": "http://127.0.0.1:8080"
+                      },
+                      "datastore_type": "%s",
                       "ipam": {
                         "type": "%s",
                         "assign_ipv4": "true",
@@ -259,16 +299,19 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 	Describe("Run IPAM plugin", func() {
 		netconf := fmt.Sprintf(`
-					{
-					  "cniVersion": "%s",
-					  "name": "net1",
-					  "type": "calico",
-					  "etcd_endpoints": "http://%s:2379",
-			          "datastore_type": "%s",
-					  "ipam": {
-					    "type": "%s"
-					  }
-					}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                    {
+                      "cniVersion": "%s",
+                      "name": "net1",
+                      "type": "calico",
+                      "etcd_endpoints": "http://%s:2379",
+                      "kubernetes": {
+                        "k8s_api_root": "http://127.0.0.1:8080"
+                      },
+                      "datastore_type": "%s",
+                      "ipam": {
+                        "type": "%s"
+                      }
+                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
 		Context("Pass explicit IP address", func() {
 			It("Return the expected IP", func() {
 				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
@@ -296,16 +339,19 @@ var _ = Describe("Calico IPAM Tests", func() {
 
 	Describe("Run IPAM DEL", func() {
 		netconf := fmt.Sprintf(`
-					{
-					  "cniVersion": "%s",
-					  "name": "net1",
-					  "type": "calico",
-					  "etcd_endpoints": "http://%s:2379",
-			          "datastore_type": "%s",
-					  "ipam": {
-					    "type": "%s"
-					  }
-					}`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
+                    {
+                      "cniVersion": "%s",
+                      "name": "net1",
+                      "type": "calico",
+                      "etcd_endpoints": "http://%s:2379",
+                      "kubernetes": {
+                        "k8s_api_root": "http://127.0.0.1:8080"
+                      },
+                      "datastore_type": "%s",
+                      "ipam": {
+                        "type": "%s"
+                      }
+                    }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
 
 		It("should exit successfully even if no address exists", func() {
 			_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)

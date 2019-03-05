@@ -126,8 +126,6 @@ endif
 
 LIBCALICOGO_PATH?=none
 
-DATASTORE_TYPE?=etcdv3
-
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
@@ -308,7 +306,11 @@ foss-checks: vendor
 # Unit Tests
 ###############################################################################
 ## Run the unit tests.
-ut: run-k8s-controller build $(BIN)/host-local
+ut:
+	make ut-etcd
+	make ut-kdd
+
+ut-etcd: run-k8s-controller build $(BIN)/host-local
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
@@ -317,14 +319,42 @@ ut: run-k8s-controller build $(BIN)/host-local
 	-e PLUGIN=calico \
 	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
 	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
-	-e DATASTORE_TYPE=$(DATASTORE_TYPE) \
+	-e DATASTORE_TYPE=etcdv3 \
 	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
 	$(LOCAL_BUILD_MOUNTS) \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+	sudo mv ./report/azure_suite.xml ./report/azure_suite_etcd.xml
+	sudo mv ./report/cni_suite.xml ./report/cni_suite_etcd.xml
 	make stop-etcd
+	make stop-k8s-controller
+
+ut-kdd: run-k8s-controller build $(BIN)/host-local
+    # Need to sleep here to allow k8s apiserver to start
+	sleep 10
+	docker exec calico-k8s-controller kubectl apply -f /crds.yaml
+	# The tests need to run as root
+	docker run --rm -t --privileged --net=host \
+	-e ETCD_IP=$(LOCAL_IP_ENV) \
+	-e LOCAL_USER_ID=0 \
+	-e ARCH=$(ARCH) \
+	-e PLUGIN=calico \
+	-e BIN=/go/src/$(PACKAGE_NAME)/$(BIN) \
+	-e CNI_SPEC_VERSION=$(CNI_SPEC_VERSION) \
+	-e DATASTORE_TYPE=kubernetes \
+	-e ETCD_ENDPOINTS=http://$(LOCAL_IP_ENV):2379 \
+	-e K8S_API_ENDPOINT=http://127.0.0.1:8080 \
+	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
+	$(LOCAL_BUILD_MOUNTS) \
+	$(CALICO_BUILD) sh -c '\
+			cd  /go/src/$(PACKAGE_NAME) && \
+			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+	sudo mv ./report/azure_suite.xml ./report/azure_suite_kdd.xml
+	sudo mv ./report/cni_suite.xml ./report/cni_suite_kdd.xml
+	make stop-etcd
+	make stop-k8s-controller
 
 ## Run the tests in a container (as root) for different CNI spec versions
 ## to make sure we don't break backwards compatibility.
@@ -350,6 +380,7 @@ run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
+	  -v `pwd`/vendor/github.com/projectcalico/libcalico-go/test/crds.yaml:/crds.yaml \
 	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) \
 	  /hyperkube controller-manager \
 	    --master=127.0.0.1:8080 \

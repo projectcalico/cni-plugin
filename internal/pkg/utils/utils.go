@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Tigera Inc
+// Copyright (c) 2015-2019 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,11 @@ import (
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 func Min(a, b int) int {
@@ -613,4 +618,51 @@ func ResolvePools(ctx context.Context, c client.Interface, pools []string, isv4 
 		result = append(result, cnet.IPNet{IPNet: *cidr})
 	}
 	return result, nil
+}
+
+func AddNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
+	var err error
+	err = nil
+	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+		// create the node in Kubernetes.
+		n := corev1.Node{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Node",
+				APIVersion: "v1",
+			},
+		}
+		n.Name = host
+
+		// Create/Update the node
+		newNode, err := kc.CoreV1().Nodes().Create(&n)
+		if err != nil {
+			if kerrors.IsAlreadyExists(err) {
+				return nil
+			}
+		}
+		log.WithField("node", newNode).WithError(err).Info("node applied")
+	} else {
+		// Otherwise, create it in Calico.
+		n := api.NewNode()
+		n.Name = host
+		_, err = c.Nodes().Create(context.Background(), n, options.SetOptions{})
+	}
+	return err
+}
+
+func DeleteNode(c client.Interface, kc *kubernetes.Clientset, host string) error {
+	var err error
+	err = nil
+	if os.Getenv("DATASTORE_TYPE") == "kubernetes" {
+		// delete the node in Kubernetes.
+		err := kc.CoreV1().Nodes().Delete(host, &metav1.DeleteOptions{})
+		log.WithError(err).Info("node deleted")
+	} else {
+		// Otherwise, delete it in Calico.
+		n := api.NewNode()
+		n.Name = host
+		_, err = c.Nodes().Delete(context.Background(), host, options.DeleteOptions{})
+		log.WithError(err).Info("node deleted")
+	}
+	return err
 }
