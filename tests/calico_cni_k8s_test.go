@@ -139,23 +139,12 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		It("successfully networks the namespace", func() {
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 			clientset, err := kubernetes.NewForConfig(config)
-
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 
 			// Create the Namespace before the tests
-			_, err = clientset.CoreV1().Namespaces().Create(&v1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:        "test",
-					Annotations: map[string]string{},
-				},
-			})
-			Expect(err).NotTo(HaveOccurred())
+			ensureNamespace(clientset, testutils.K8S_TEST_NS)
 
 			name := fmt.Sprintf("run%d", rand.Uint32())
 
@@ -171,9 +160,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
+
 			containerID, result, contVeth, contAddresses, contRoutes, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).ShouldNot(HaveOccurred())
 
@@ -312,14 +300,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		Context("when a named port is set", func() {
 			It("it is added to the workload endpoint", func() {
 				config, err := clientcmd.DefaultClientConfig.ClientConfig()
-				if err != nil {
-					panic(err)
-				}
+				Expect(err).NotTo(HaveOccurred())
 				clientset, err := kubernetes.NewForConfig(config)
-
-				if err != nil {
-					panic(err)
-				}
+				Expect(err).NotTo(HaveOccurred())
 
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
@@ -338,9 +321,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 						NodeName: hostname,
 					},
 				})
-				if err != nil {
-					panic(err)
-				}
+				Expect(err).NotTo(HaveOccurred())
+
 				containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 				Expect(err).ShouldNot(HaveOccurred())
 
@@ -453,9 +435,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				})
 				Expect(err).NotTo(HaveOccurred())
 
-				if err := testutils.CreateHostVeth("", name, testutils.K8S_TEST_NS, hostname); err != nil {
-					panic(err)
-				}
+				err = testutils.CreateHostVeth("", name, testutils.K8S_TEST_NS, hostname)
+				Expect(err).NotTo(HaveOccurred())
+
 				_, _, _, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 				Expect(err).ShouldNot(HaveOccurred())
 
@@ -2459,13 +2441,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		It("should add a service account profile to the workload endpoint", func() {
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 			clientset, err = kubernetes.NewForConfig(config)
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 
 			name = fmt.Sprintf("run%d", rand.Uint32())
 
@@ -2477,9 +2455,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			_, err = clientset.CoreV1().ServiceAccounts(testutils.K8S_TEST_NS).Create(&v1.ServiceAccount{
 				ObjectMeta: metav1.ObjectMeta{Name: saName},
 			})
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 
 			// Create a K8s pod with the service account
 			_, err = clientset.CoreV1().Pods(testutils.K8S_TEST_NS).Create(&v1.Pod{
@@ -2497,12 +2473,16 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName:           hostname,
 				},
 			})
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
+
 			containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 			Expect(err).ShouldNot(HaveOccurred())
 
+			// Delete the service account.
+			err = clientset.CoreV1().ServiceAccounts(testutils.K8S_TEST_NS).Delete(saName, &metav1.DeleteOptions{})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Perform assertions on created data.
 			mac := contVeth.Attrs().HardwareAddr
 
 			Expect(len(result.IPs)).Should(Equal(1))
@@ -2621,13 +2601,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		It("should add a workload endpoint with the GenerateName", func() {
 			config, err := clientcmd.DefaultClientConfig.ClientConfig()
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 			clientset, err = kubernetes.NewForConfig(config)
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
 
 			// Make sure the namespace exists.
 			ensureNamespace(clientset, testutils.K8S_TEST_NS)
@@ -2650,9 +2626,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 					NodeName: hostname,
 				},
 			})
-			if err != nil {
-				panic(err)
-			}
+			Expect(err).NotTo(HaveOccurred())
+
 			containerID, result, contVeth, _, _, contNs, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "")
 
 			Expect(err).ShouldNot(HaveOccurred())

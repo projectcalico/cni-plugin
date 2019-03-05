@@ -169,7 +169,7 @@ func GetResultForCurrent(session *gexec.Session, cniVersion string) (*current.Re
 
 // RunIPAMPlugin sets ENV vars required then calls the IPAM plugin
 // specified in the config and returns the result and exitCode.
-func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, types.Error, int) {
+func RunIPAMPlugin(netconf, command, args, cid, cniVersion string) (*current.Result, types.Error, int) {
 	conf := types.NetConf{}
 	if err := json.Unmarshal([]byte(netconf), &conf); err != nil {
 		panic(fmt.Errorf("failed to load netconf: %v", err))
@@ -178,7 +178,7 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 	// Run the CNI plugin passing in the supplied netconf
 	cmd := &exec.Cmd{
 		Env: []string{
-			"CNI_CONTAINERID=a",
+			fmt.Sprintf("CNI_CONTAINERID=%s", cid),
 			"CNI_NETNS=b",
 			"CNI_IFNAME=c",
 			"CNI_PATH=d",
@@ -214,7 +214,7 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 	exitCode := session.ExitCode()
 
 	result := &current.Result{}
-	error := types.Error{}
+	e := types.Error{}
 	stdout := session.Out.Contents()
 	if exitCode == 0 {
 		if command == "ADD" {
@@ -225,12 +225,12 @@ func RunIPAMPlugin(netconf, command, args, cniVersion string) (*current.Result, 
 			}
 		}
 	} else {
-		if err := json.Unmarshal(stdout, &error); err != nil {
+		if err := json.Unmarshal(stdout, &e); err != nil {
 			panic(fmt.Errorf("failed to load error: %s %v", stdout, err))
 		}
 	}
 
-	return result, error, exitCode
+	return result, e, exitCode
 }
 
 func CreateContainerNamespace() (containerNs ns.NetNS, containerId string, err error) {

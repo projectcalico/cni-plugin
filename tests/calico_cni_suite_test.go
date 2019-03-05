@@ -3,6 +3,9 @@
 package main_test
 
 import (
+	"fmt"
+	"os"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
@@ -13,6 +16,7 @@ import (
 
 func TestCalicoCni(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter("../report/cni_suite.xml")
-	RunSpecsWithDefaultAndCustomReporters(t, "CalicoCni Suite", []Reporter{junitReporter})
+	file := fmt.Sprintf("../report/cni_suite_%s.xml", os.Getenv("DATASTORE_TYPE"))
+	junitReporter := reporters.NewJUnitReporter(file)
+	RunSpecsWithDefaultAndCustomReporters(t, "Calico CNI Suite", []Reporter{junitReporter})
 }

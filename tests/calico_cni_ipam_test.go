@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/containernetworking/cni/pkg/types"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/ginkgo/extensions/table"
 	. "github.com/onsi/gomega"
@@ -17,6 +18,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
 	"github.com/projectcalico/libcalico-go/lib/options"
+	uuid "github.com/satori/go.uuid"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -38,10 +40,15 @@ var _ = Describe("Calico IPAM Tests", func() {
 	if err != nil {
 		panic(err)
 	}
+
+	var cid string
 	BeforeEach(func() {
 		testutils.WipeDatastore()
 		testutils.MustCreateNewIPPool(calicoClient, defaultIPv4Pool, false, false, true)
 		testutils.MustCreateNewIPPool(calicoClient, "fd80:24e2:f998:72d6::/64", false, false, true)
+
+		// Create a unique container ID for each test.
+		cid = uuid.NewV4().String()
 
 		// Create the node for these tests. The IPAM code requires a corresponding Calico node to exist.
 		var name string
@@ -60,33 +67,32 @@ var _ = Describe("Calico IPAM Tests", func() {
 	})
 
 	Describe("Run IPAM plugin", func() {
-		Context("Do it", func() {
-			DescribeTable("Request different numbers of IP addresses",
-				func(expectedIPv4, expectedIPv6 bool, netconf string) {
+		DescribeTable("Request different numbers of IP addresses",
+			func(expectedIPv4, expectedIPv6 bool, netconf string) {
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
+				var ip4Mask, ip6Mask string
 
-					result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
-					var ip4Mask, ip6Mask string
-
-					for _, ip := range result.IPs {
-						if ip.Version == "4" {
-							ip4Mask = ip.Address.Mask.String()
-						} else if ip.Version == "6" {
-							ip6Mask = ip.Address.Mask.String()
-						}
+				for _, ip := range result.IPs {
+					if ip.Version == "4" {
+						ip4Mask = ip.Address.Mask.String()
+					} else if ip.Version == "6" {
+						ip6Mask = ip.Address.Mask.String()
 					}
+				}
 
-					if expectedIPv4 {
-						Expect(ip4Mask).Should(Equal("ffffffff"))
-					}
+				if expectedIPv4 {
+					Expect(ip4Mask).Should(Equal("ffffffff"))
+				}
 
-					if expectedIPv6 {
-						Expect(ip6Mask).Should(Equal("ffffffffffffffffffffffffffffffff"))
-					}
+				if expectedIPv6 {
+					Expect(ip6Mask).Should(Equal("ffffffffffffffffffffffffffffffff"))
+				}
 
-					_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cniVersion)
-					Expect(exitCode).Should(Equal(0))
-				},
-				Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
+				_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "", cid, cniVersion)
+				Expect(exitCode).Should(Equal(0))
+			},
+
+			Entry("IPAM with no configuration", true, false, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -101,7 +107,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "type": "%s"
               }
             }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-				Entry("IPAM with IPv4 (explicit)", true, false, fmt.Sprintf(`
+			Entry("IPAM with IPv4 (explicit)", true, false, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -116,7 +122,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "assign_ipv4": "true"
               }
             }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-				Entry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
+			Entry("IPAM with IPv6 only", false, true, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -132,7 +138,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "assign_ipv6": "true"
               }
             }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-				Entry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
+			Entry("IPAM with IPv4 and IPv6", true, true, fmt.Sprintf(`
             {
               "cniVersion": "%s",
               "name": "net1",
@@ -149,8 +155,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                 "assign_ipv6": "true"
               }
             }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)),
-			)
-		})
+		)
 	})
 
 	Describe("Run IPAM plugin - Verify IP Pools", func() {
@@ -172,7 +177,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                     "ipv4_pools": [ "192.168.0.0/16" ]
                     }
                 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(len(result.IPs)).To(Equal(1))
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.168."))
 			})
@@ -197,7 +202,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "ipv4_pools": [ "192.169.1.0/24", "192.168.0.0/16" ]
                       }
                 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(result.IPs[0].Address.IP.String()).Should(Or(HavePrefix("192.168."), HavePrefix("192.169.1")))
 			})
 		})
@@ -221,7 +226,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                 }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
 
 				// Get an allocation
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.168."))
 
 				// Disable the currently enabled pool
@@ -235,7 +240,7 @@ var _ = Describe("Calico IPAM Tests", func() {
 				testutils.MustCreateNewIPPool(calicoClient, "192.169.1.0/24", false, false, true)
 
 				// Get an allocation then check that it is not from the disabled pool
-				result, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				result, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(result.IPs[0].Address.IP.String()).Should(HavePrefix("192.169.1"))
 
 				// Re-enable the the pool. We can't delete the node if the IP pool is disabled.
@@ -268,7 +273,7 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
                       }
                     }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
-				_, err, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				_, err, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(err.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 
@@ -290,14 +295,14 @@ var _ = Describe("Calico IPAM Tests", func() {
                         "ipv4_pools": [ "192.168.0.0/16", "192.169.1.0/24" ]
                       }
                     }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
-				_, err, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cniVersion)
+				_, err, _ := testutils.RunIPAMPlugin(netconf, "ADD", "", cid, cniVersion)
 				Expect(err.Msg).Should(ContainSubstring("192.169.1.0/24) does not exist"))
 			})
 		})
 
 	})
 
-	Describe("Run IPAM plugin", func() {
+	Describe("Requesting an explicit IP address", func() {
 		netconf := fmt.Sprintf(`
                     {
                       "cniVersion": "%s",
@@ -314,24 +319,24 @@ var _ = Describe("Calico IPAM Tests", func() {
                     }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
 		Context("Pass explicit IP address", func() {
 			It("Return the expected IP", func() {
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
 				Expect(len(result.IPs)).Should(Equal(1))
 				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
 			})
 			It("Return the expected IP twice after deleting in the middle", func() {
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
 				Expect(len(result.IPs)).Should(Equal(1))
 				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
-				_, _, _ = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
-				result, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				_, _, _ = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cid, cniVersion)
+				result, _, _ = testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
 				Expect(len(result.IPs)).Should(Equal(1))
 				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
 			})
 			It("Doesn't allow an explicit IP to be assigned twice", func() {
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				result, _, _ := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
 				Expect(len(result.IPs)).Should(Equal(1))
 				Expect(result.IPs[0].Address.String()).Should(Equal("192.168.123.123/32"))
-				result, _, exitCode := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cniVersion)
+				result, _, exitCode := testutils.RunIPAMPlugin(netconf, "ADD", "IP=192.168.123.123", cid, cniVersion)
 				Expect(exitCode).Should(BeNumerically(">", 0))
 			})
 		})
@@ -354,14 +359,16 @@ var _ = Describe("Calico IPAM Tests", func() {
                     }`, cniVersion, os.Getenv("ETCD_IP"), os.Getenv("DATASTORE_TYPE"), plugin)
 
 		It("should exit successfully even if no address exists", func() {
-			_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+			_, _, exitCode := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cid, cniVersion)
 			Expect(exitCode).Should(Equal(0))
 		})
 
 		Context("when using old IPAM handle", func() {
 			It("should remove the old handle", func() {
-				// Create an IP using workload.
-				workload := "a"
+				// Create an IP using workload as the handle. This is the "old" way of
+				// assigning IPs, prior to this PR:
+				// https://github.com/projectcalico/cni-plugin/pull/446
+				workload := cid
 				assignArgs := ipam.AssignIPArgs{
 					IP:       cnet.MustParseIP("192.168.123.123"),
 					HandleID: &workload,
@@ -375,16 +382,19 @@ var _ = Describe("Calico IPAM Tests", func() {
 				Expect(err).NotTo(HaveOccurred())
 				Expect(ips).To(HaveLen(1))
 
-				// Remove the IP and handle.
-				result, _, _ := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+				// Call the IPAM plugin and assert that it properly cleans up the allocation.
+				result, e, rc := testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cid, cniVersion)
+				Expect(e).To(Equal(types.Error{}))
+				Expect(rc).To(Equal(0))
 				Expect(len(result.IPs)).Should(Equal(0))
 
 				// Verify that the workload handle is gone.
 				_, err = calicoClient.IPAM().IPsByHandle(ctx, workload)
 				Expect(err).To(HaveOccurred())
 
-				// Create an IP using the new network name and containerID
-				handleID := "net1.a"
+				// Create an IP using the "new" style handleID composed of the
+				// network name and containerID.
+				handleID := fmt.Sprintf("net1.%s", cid)
 				assignArgs = ipam.AssignIPArgs{
 					IP:       cnet.MustParseIP("192.168.123.123"),
 					HandleID: &handleID,
@@ -398,7 +408,9 @@ var _ = Describe("Calico IPAM Tests", func() {
 				Expect(ips).To(HaveLen(1))
 
 				// Remove the IP and handle.
-				result, _, _ = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cniVersion)
+				result, e, rc = testutils.RunIPAMPlugin(netconf, "DEL", "IP=192.168.123.123", cid, cniVersion)
+				Expect(e).To(Equal(types.Error{}))
+				Expect(rc).To(Equal(0))
 				Expect(len(result.IPs)).Should(Equal(0))
 
 				// Verify that the handleID is gone.
