@@ -127,7 +127,10 @@ func Migrate(ctxt context.Context, c client.Interface, nodename string) error {
 			log.Info("Successfully assigned and updated IPIP tunnel address")
 		}
 	}
-	log.WithField("ip", node.Spec.BGP.IPv4IPIPTunnelAddr).Info("node has IPIP tunnel address")
+
+	if node.Spec.BGP != nil {
+		log.WithField("ip", node.Spec.BGP.IPv4IPIPTunnelAddr).Info("node has IPIP tunnel address")
+	}
 
 	// Open k8s-pod-directory to check for emptiness.
 	log.Info("checking if host-local IPAM data dir dir is empty...")
