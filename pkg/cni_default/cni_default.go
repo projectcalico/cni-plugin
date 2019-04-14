@@ -93,18 +93,13 @@ func CmdAddCNIDefault(ctx context.Context, args *skel.CmdArgs, conf types.NetCon
 		}
 
 
-////=================================
-
 		originalLabels := map[string]string{}
 		for _, originalLabel := range conf.Args.Mesos.NetworkInfo.Labels.Labels {
-			// Sanitize mesos labels so that they pass the k8s label validation,
-			// as mesos labels accept any unicode value.
 			k := originalLabel.Key
 			v := originalLabel.Value
 
 			originalLabels[k] = v
 		}
-
 
 		//ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
 		//ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
@@ -119,38 +114,8 @@ func CmdAddCNIDefault(ctx context.Context, args *skel.CmdArgs, conf types.NetCon
 			return nil, err
 		}
 
-////==================================
-
-
-////==================================
-
 		// 1) Run the IPAM plugin and make sure there's an IP address returned.
-
 		// see ProcessIpAddrs switch case ipAddrs == "" && ipAddrsNoIpam == "":
-
-		//logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
-		//	"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
-		//ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
-		//logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
-		//if err != nil {
-		//	return nil, err
-		//}
-		//
-		//// Convert IPAM result into current Result.
-		//// IPAM result has a bunch of fields that are optional for an IPAM plugin
-		//// but required for a CNI plugin, so this is to populate those fields.
-		//// See CNI Spec doc for more details.
-		//result, err = current.NewResultFromResult(ipamResult)
-		//if err != nil {
-		//	utils.ReleaseIPAllocation(logger, conf, args)
-		//	return nil, err
-		//}
-		//
-		//if len(result.IPs) == 0 {
-		//	utils.ReleaseIPAllocation(logger, conf, args)
-		//	return nil, errors.New("IPAM plugin returned missing IP config")
-		//}
-////==================================
 
 
 		// 2) Create the endpoint object
