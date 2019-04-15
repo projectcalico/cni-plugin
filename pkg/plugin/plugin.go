@@ -16,9 +16,9 @@ package plugin
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
+	"github.com/projectcalico/cni-plugin/pkg/cni_default"
 	"os"
 	"runtime"
 
@@ -26,7 +26,6 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	cniSpecVersion "github.com/containernetworking/cni/pkg/version"
-	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/k8s"
 	"github.com/projectcalico/cni-plugin/pkg/types"
@@ -53,6 +52,8 @@ func cmdAdd(args *skel.CmdArgs) error {
 	}
 
 	utils.ConfigureLogging(conf.LogLevel)
+
+	logrus.Debugf("config %v", conf)
 
 	if !conf.NodenameFileOptional {
 		// Configured to wait for the nodename file - don't start until it exists.
@@ -191,135 +192,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 		}
 	} else {
 		// Default CNI behavior
-		// Validate enabled features
-		if conf.FeatureControl.IPAddrsNoIpam {
-			return errors.New("requested feature is not supported for this runtime: ip_addrs_no_ipam")
-		}
-
-		// use the CNI network name as the Calico profile.
-		profileID := conf.Name
-
-		endpointAlreadyExisted := endpoint != nil
-		if endpointAlreadyExisted {
-			// There is an existing endpoint - no need to create another.
-			// This occurs when adding an existing container to a new CNI network
-			// Find the IP address from the endpoint and use that in the response.
-			// Don't create the veth or do any networking.
-			// Just update the profile on the endpoint. The profile will be created if needed during the
-			// profile processing step.
-			foundProfile := false
-			for _, p := range endpoint.Spec.Profiles {
-				if p == profileID {
-					logger.Infof("Calico CNI endpoint already has profile: %s\n", profileID)
-					foundProfile = true
-					break
-				}
-			}
-			if !foundProfile {
-				logger.Infof("Calico CNI appending profile: %s\n", profileID)
-				endpoint.Spec.Profiles = append(endpoint.Spec.Profiles, profileID)
-			}
-			result, err = utils.CreateResultFromEndpoint(endpoint)
-			logger.WithField("result", result).Debug("Created result from endpoint")
-			if err != nil {
-				return err
-			}
-		} else {
-			// There's no existing endpoint, so we need to do the following:
-			// 1) Call the configured IPAM plugin to get IP address(es)
-			// 2) Configure the Calico endpoint
-			// 3) Create the veth, configuring it on both the host and container namespace.
-
-			// 1) Run the IPAM plugin and make sure there's an IP address returned.
-			logger.WithFields(logrus.Fields{"paths": os.Getenv("CNI_PATH"),
-				"type": conf.IPAM.Type}).Debug("Looking for IPAM plugin in paths")
-			ipamResult, err := ipam.ExecAdd(conf.IPAM.Type, args.StdinData)
-			logger.WithField("IPAM result", ipamResult).Info("Got result from IPAM plugin")
-			if err != nil {
-				return err
-			}
-
-			// Convert IPAM result into current Result.
-			// IPAM result has a bunch of fields that are optional for an IPAM plugin
-			// but required for a CNI plugin, so this is to populate those fields.
-			// See CNI Spec doc for more details.
-			result, err = current.NewResultFromResult(ipamResult)
-			if err != nil {
-				utils.ReleaseIPAllocation(logger, conf, args)
-				return err
-			}
-
-			if len(result.IPs) == 0 {
-				utils.ReleaseIPAllocation(logger, conf, args)
-				return errors.New("IPAM plugin returned missing IP config")
-			}
-
-			// Parse endpoint labels passed in by Mesos, and store in a map.
-			labels := map[string]string{}
-			for _, label := range conf.Args.Mesos.NetworkInfo.Labels.Labels {
-				// Sanitize mesos labels so that they pass the k8s label validation,
-				// as mesos labels accept any unicode value.
-				k := utils.SanitizeMesosLabel(label.Key)
-				v := utils.SanitizeMesosLabel(label.Value)
-
-				labels[k] = v
-			}
-
-			// 2) Create the endpoint object
-			endpoint = api.NewWorkloadEndpoint()
-			endpoint.Name = wepIDs.WEPName
-			endpoint.Namespace = wepIDs.Namespace
-			endpoint.Spec.Endpoint = wepIDs.Endpoint
-			endpoint.Spec.Node = wepIDs.Node
-			endpoint.Spec.Orchestrator = wepIDs.Orchestrator
-			endpoint.Spec.ContainerID = wepIDs.ContainerID
-			endpoint.Labels = labels
-			endpoint.Spec.Profiles = []string{profileID}
-
-			logger.WithField("endpoint", endpoint).Debug("Populated endpoint (without nets)")
-			if err = utils.PopulateEndpointNets(endpoint, result); err != nil {
-				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
-				return err
-			}
-			logger.WithField("endpoint", endpoint).Info("Populated endpoint (with nets)")
-
-			logger.Infof("Calico CNI using IPs: %s", endpoint.Spec.IPNetworks)
-
-			// 3) Set up the veth
-			hostVethName, contVethMac, err := utils.DoNetworking(
-				args, conf, result, logger, "", utils.DefaultRoutes)
-			if err != nil {
-				// Cleanup IP allocation and return the error.
-				utils.ReleaseIPAllocation(logger, conf, args)
-				return err
-			}
-
-			logger.WithFields(logrus.Fields{
-				"HostVethName":     hostVethName,
-				"ContainerVethMac": contVethMac,
-			}).Info("Networked namespace")
-
-			endpoint.Spec.MAC = contVethMac
-			endpoint.Spec.InterfaceName = hostVethName
-		}
-
-		// Write the endpoint object (either the newly created one, or the updated one with a new ProfileIDs).
-		if _, err := utils.CreateOrUpdate(ctx, calicoClient, endpoint); err != nil {
-			if !endpointAlreadyExisted {
-				// Only clean up the IP allocation if this was a new endpoint.  Otherwise,
-				// we'd release the IP that is already attached to the existing endpoint.
-				utils.ReleaseIPAllocation(logger, conf, args)
-			}
+		if result, err = cni_default.CmdAddCNIDefault(ctx, args, conf, *wepIDs, calicoClient, endpoint); err != nil {
 			return err
 		}
-
-		logger.WithField("endpoint", endpoint).Info("Wrote endpoint to datastore")
-
-		// Add the interface created above to the CNI result.
-		result.Interfaces = append(result.Interfaces, &current.Interface{
-			Name: endpoint.Spec.InterfaceName},
-		)
 	}
 
 	// Handle profile creation - this is only done if there isn't a specific policy handler.
@@ -444,30 +319,9 @@ func cmdDel(args *skel.CmdArgs) error {
 	// Handle k8s specific bits of handling the DEL.
 	if epIDs.Orchestrator == api.OrchestratorKubernetes {
 		return k8s.CmdDelK8s(ctx, calicoClient, *epIDs, args, conf, logger)
+	} else {
+		return cni_default.CmdDelCNIDefault(ctx, calicoClient, *epIDs, args, conf, logger)
 	}
-
-	// Release the IP address by calling the configured IPAM plugin.
-	ipamErr := utils.DeleteIPAM(conf, args, logger)
-
-	// Delete the WorkloadEndpoint object from the datastore.
-	if _, err = calicoClient.WorkloadEndpoints().Delete(ctx, epIDs.Namespace, epIDs.WEPName, options.DeleteOptions{}); err != nil {
-		if _, ok := err.(cerrors.ErrorResourceDoesNotExist); ok {
-			// Log and proceed with the clean up if WEP doesn't exist.
-			logger.WithField("WorkloadEndpoint", epIDs.WEPName).Info("Endpoint object does not exist, no need to clean up.")
-		} else {
-			return err
-		}
-	}
-
-	// Clean up namespace by removing the interfaces.
-	err = utils.CleanUpNamespace(args, logger)
-	if err != nil {
-		return err
-	}
-
-	// Return the IPAM error if there was one. The IPAM error will be lost if there was also an error in cleaning up
-	// the device or endpoint, but crucially, the user will know the overall operation failed.
-	return ipamErr
 }
 
 func Main(version string) {
