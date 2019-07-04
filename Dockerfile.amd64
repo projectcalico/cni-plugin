@@ -1,10 +1,12 @@
 FROM debian:9.8-slim
 
+RUN mkdir -p /opt/cni/bin
+
+FROM scratch
+
 LABEL maintainer "Casey Davenport <casey@tigera.io>"
 
 ADD bin/amd64/ /opt/cni/bin/
-ADD k8s-install/scripts/install-cni.sh /install-cni.sh
-ADD k8s-install/scripts/calico.conf.default /calico.conf.tmp
 
 ENV PATH=$PATH:/opt/cni/bin
 WORKDIR /opt/cni/bin

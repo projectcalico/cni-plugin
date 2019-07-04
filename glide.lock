@@ -1,11 +1,17 @@
 hash: 37206d4da7c8d2b92e681a12a2f25fd2be343ccd648fb8986d0a4987c868e30a
-updated: 2019-06-21T04:17:10.988409102Z
+updated: 2019-07-03T14:23:49.633320674-07:00
 imports:
 - name: cloud.google.com/go
   version: 3b1ae45394a234c385be014e9a488f2bb6eef821
   subpackages:
   - compute/metadata
   - internal
+- name: github.com/alecthomas/template
+  version: a0175ee3bccc567396460bf5acd36800cb10c49c
+  subpackages:
+  - parse
+- name: github.com/alecthomas/units
+  version: 2efee857e7cfd4f3d0138cc3cbb1b4966962b93a
 - name: github.com/alexflint/go-filemutex
   version: 72bdc8eae2aef913234599b837f5dda445ca9bd9
 - name: github.com/Azure/go-autorest
@@ -214,9 +220,10 @@ imports:
   - lib/validator/v3
   - lib/watch
 - name: github.com/prometheus/client_golang
-  version: 5cec1d0429b02e4323e042eb04dafdb079ddf568
+  version: 773f5027234d0b08adf766be34f55df2f312abf7
   subpackages:
   - prometheus
+  - prometheus/internal
 - name: github.com/prometheus/client_model
   version: 6f3806018612930941127f2a7c6c453ba2c527d2
   subpackages:
@@ -226,6 +233,7 @@ imports:
   subpackages:
   - expfmt
   - internal/bitbucket.org/ww/goautoneg
+  - log
   - model
 - name: github.com/prometheus/procfs
   version: a6e9df898b1336106c743392c48ee0b71f5c4efa
@@ -246,7 +254,7 @@ imports:
 - name: github.com/vishvananda/netns
   version: 54f0e4339ce73702a0607f49922aaa1e749b418d
 - name: golang.org/x/crypto
-  version: 94eea52f7b742c7cbe0b03b22f0c4c8631ece122
+  version: 49796115aa4b964c318aad4f3084fdb41e9aa067
   subpackages:
   - ssh/terminal
 - name: golang.org/x/net
@@ -272,6 +280,8 @@ imports:
   subpackages:
   - unix
   - windows
+  - windows/registry
+  - windows/svc/eventlog
 - name: golang.org/x/text
   version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
@@ -320,6 +330,8 @@ imports:
   - status
   - tap
   - transport
+- name: gopkg.in/alecthomas/kingpin.v2
+  version: 947dcec5ba9c011838740e680966fd7087a71d0d
 - name: gopkg.in/go-playground/validator.v9
   version: b199fa0642d29caca62b6a99d65cc981ba5edc3b
 - name: gopkg.in/inf.v0

@@ -11,19 +11,53 @@ import (
 	"strings"
 )
 
-var secretFile = "tmp/serviceaccount/token"
+var expectedDefaultConfig string = `{
+  "name": "k8s-pod-network",
+  "cniVersion": "0.3.1", 
+  "plugins": [
+    {
+      "type": "calico",
+      "log_level": "warn",
+      "datastore_type": "kubernetes",
+      "nodename": "my-node",
+      "mtu": 1500,
+      "ipam": {"type": "calico-ipam"},
+      "policy": {"type": "k8s"},
+      "kubernetes": {"kubeconfig": "/etc/cni/net.d/calico-kubeconfig"}
+    },
+    {
+      "type": "portmap",
+      "snat": true,
+      "capabilities": {"portMappings": true}
+    }
+  ],
+}`
 
-// runCniContainer will run install-cni.sh.
-// TODO: We should be returning an error if the command fails, there currently is
-// not a way to get that from the container package.
-func runCniContainer(extraArgs ...string) error {
+var expectedAlternateConfig string = `{
+    "name": "alternate",
+    "type": "calico",
+    "etcd_endpoints": "",
+    "etcd_discovery_srv": "",
+    "etcd_key_file": "",
+    "etcd_cert_file": "",
+    "etcd_ca_cert_file": "",
+    "log_level": "warn",
+    "ipam": {
+        "type": "calico-ipam"
+    },
+    "policy": {
+        "type": "k8s",
+        "k8s_api_root": "https://127.0.0.1:8080",
+        "k8s_auth_token": "my-secret-key"
+    },
+    "kubernetes": {
+        "kubeconfig": "/etc/cni/net.d/calico-kubeconfig"
+    }
+}`
+
+// runCniContainer will run the install binary within the CNI container.
+func runCniContainer(tempDir string, extraArgs ...string) error {
 	name := "cni"
-
-	// Get the CWD for mounting directories into container.
-	cwd, err := os.Getwd()
-	if err != nil {
-		Fail("Could not get CWD")
-	}
 
 	// Ensure the install cni container was not left over from another run.
 	out, err := exec.Command("docker", "rm", name).CombinedOutput()
@@ -39,14 +73,14 @@ func runCniContainer(extraArgs ...string) error {
 		"-e", "SLEEP=false",
 		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
 		"-e", "KUBERNETES_SERVICE_PORT=8080",
-		"-v", cwd + "/test-templates:/template",
-		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
-		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
-		"-v", cwd + "/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
+		"-e", "NODENAME=my-node",
+		"-v", tempDir + "/bin:/host/opt/cni/bin",
+		"-v", tempDir + "/net.d:/host/etc/cni/net.d",
+		"-v", tempDir + "/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
 	}
 	args = append(args, extraArgs...)
 	image := fmt.Sprintf("%s", os.Getenv("CONTAINER_NAME"))
-	args = append(args, image, "/install-cni.sh")
+	args = append(args, image, "/opt/cni/bin/install")
 
 	out, err = exec.Command("docker", args...).CombinedOutput()
 	GinkgoWriter.Write(out)
@@ -54,162 +88,157 @@ func runCniContainer(extraArgs ...string) error {
 	return err
 }
 
-// cleanup uses the calico/cni container to cleanup after itself as it creates
-// things as root.
-func cleanup() {
-	cwd, err := os.Getwd()
-	if err != nil {
-		Fail("Could not get CWD")
-	}
+var _ = Describe("CNI installation tests", func() {
+	var tempDir string
+	BeforeEach(func() {
+		// Make a temporary directory for this test and build arguments to pass
+		// to the CNI container, configuring it to use the temp directory.
+		name, err := ioutil.TempDir("/tmp", "")
+		Expect(err).NotTo(HaveOccurred())
+		tempDir = fmt.Sprintf("/tmp/%s", name)
 
-	// Assemble our arguments.
-	args := []string{
-		"run", "--rm", "--name", "cni_cleanup",
-		"-e", "SLEEP=false",
-		"-e", "KUBERNETES_SERVICE_HOST=127.0.0.1",
-		"-e", "KUBERNETES_SERVICE_PORT=8080",
-		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
-		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
-		"-v", cwd + "/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
-		fmt.Sprintf("%s", os.Getenv("CONTAINER_NAME")),
-		"sh", "-c", "rm -rf /host/opt/cni/bin/* /host/etc/cni/net.d/*",
-	}
+		// Make subdirectories for where we expect binaries and config to be installed.
+		err = os.MkdirAll(tempDir+"/bin", 0755)
+		if err != nil {
+			Fail("Failed to create directory tmp/bin")
+		}
+		err = os.MkdirAll(tempDir+"/net.d", 0755)
+		if err != nil {
+			Fail("Failed to create directory tmp/net.d")
+		}
+		err = os.MkdirAll(tempDir+"/serviceaccount", 0755)
+		if err != nil {
+			Fail("Failed to create directory tmp/serviceaccount")
+		}
 
-	out, err := exec.Command("docker", args...).CombinedOutput()
+		// Create token file for the Kubernetes client.
+		k8sSecret := []byte("fake-kubernetes-token")
+		var tokenFile = fmt.Sprintf("%s/serviceaccount/token", tempDir)
+		err = ioutil.WriteFile(tokenFile, k8sSecret, 0755)
+		if err != nil {
+			Fail(fmt.Sprintf("Failed to write k8s secret file: %v", err))
+		}
 
-	if err != nil {
-		Fail(fmt.Sprintf("Failed to clean up root owned files: %s", string(out)))
-	}
-}
+		// Create a ca.crt - requires to the in cluster config works correctly. Since this is just test code,
+		// we just need something that parses as an X.509 certificate.
+		k8sCA := []byte(`-----BEGIN CERTIFICATE-----
+MIIDazCCAlOgAwIBAgIUMKY6C1Jk4rHpwHD03qHA2QRyTFYwDQYJKoZIhvcNAQEL
+BQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUxITAfBgNVBAoM
+GEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDAeFw0xOTA3MDMyMjEyMTVaFw0yMDA3
+MDIyMjEyMTVaMEUxCzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEw
+HwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwggEiMA0GCSqGSIb3DQEB
+AQUAA4IBDwAwggEKAoIBAQCZWeLckt9q14it7gXyJbZZDCxzl8pNzQbN6cGEJWo2
+9QoqxveW1XKxXrsgH3rTDBjRjxj/ikbaBFLpRTWOrGuyr3dd/sGNByBmFv0HYQ2I
+oGPvRt5opDstVK8lnqH22JtrvKJZf7WIoRbmcL5j2p2S5cyvE8JJi3rhA9sMrgwl
+wcQMjC3exccaRpA/3XwwsMeAvz08VmrT3BAbpfomf/Vs2JksLTLXtIhBQdPTCthe
+AMZwC2oymSy7oZ6GeDkQN34utW3t7sORSSJtSyrfOMLiN9x4RhI70naNcH9b9ESi
+5+UKpG9KFcMZgxmRvP042z618UUrZwzdLFpwtmxe1AyJAgMBAAGjUzBRMB0GA1Ud
+DgQWBBTV+A1uZr/vrKH1YEoKEWN63uNPKzAfBgNVHSMEGDAWgBTV+A1uZr/vrKH1
+YEoKEWN63uNPKzAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBN
+/a9Xbgzs78HkkemxR4P8Sd9B0hZaSd5clAA/YKsYyUPWIEkKF/fWvO5cm46OdktP
+F71CNwp/cwL6Zqcdk+1PpiMYIGpJ0IsqPltn5KdRSbbf2qJyNflKj2EbWAUydyTC
+JeLQkW01TNIcFepLRsvjUxlZ572OLaB2GvpndO6ryfFs2dwu96gmUqA+Rk7+h3/h
+yvQ/7I8lUKV1hMeCWc2k/x146B/gEgyDl1zUNnJZ/hrKmXqjQy3dkj4HzBePHYND
+2oFTq6p93/5bB6PAJknn1ZTGQAXzVKrqau8gHaHw1F+I2p3SuN3NGz4v7HHXo+e4
+PuB/TL+u2y+iQUyXxLy3
+-----END CERTIFICATE-----`)
+		var caFile = fmt.Sprintf("%s/serviceaccount/ca.crt", tempDir)
+		err = ioutil.WriteFile(caFile, k8sCA, 0755)
+		if err != nil {
+			Fail(fmt.Sprintf("Failed to write k8s CA file for test: %v", err))
+		}
 
-var _ = BeforeSuite(func() {
-	// Make the directories we'll need for storing files.
-	err := os.MkdirAll("tmp/bin", 0755)
-	if err != nil {
-		Fail("Failed to create directory tmp/bin")
-	}
-	err = os.MkdirAll("tmp/net.d", 0755)
-	if err != nil {
-		Fail("Failed to create directory tmp/net.d")
-	}
-	err = os.MkdirAll("tmp/serviceaccount", 0755)
-	if err != nil {
-		Fail("Failed to create directory tmp/serviceaccount")
-	}
-	cleanup()
-
-	// Create a secrets file for parsing.
-	k8sSecret := []byte("my-secret-key")
-	err = ioutil.WriteFile(secretFile, k8sSecret, 0755)
-	if err != nil {
-		Fail(fmt.Sprintf("Failed to write k8s secret file: %v", err))
-	}
-})
-
-var _ = AfterSuite(func() {
-	err := os.RemoveAll("tmp")
-	if err != nil {
-		fmt.Println("Failed to clean up directories")
-	}
-})
-
-var _ = Describe("install-cni.sh tests", func() {
-	AfterEach(func() {
-		cleanup()
 	})
 
-	Describe("Run install-cni", func() {
-		Context("With default values", func() {
-			It("Should install bins and config", func() {
-				err := runCniContainer()
-				Expect(err).NotTo(HaveOccurred())
+	AfterEach(func() {
+		// Remove all contents of the temp directory.
+		err := os.RemoveAll(tempDir)
+		Expect(err).NotTo(HaveOccurred())
+	})
 
-				// Get a list of files in the defualt CNI bin location.
-				files, err := ioutil.ReadDir("tmp/bin")
-				if err != nil {
-					Fail("Could not list the files in tmp/bin")
-				}
-				names := []string{}
-				for _, file := range files {
-					names = append(names, file.Name())
-				}
-
-				// Get a list of files in the default location for CNI config.
-				files, err = ioutil.ReadDir("tmp/net.d")
-				if err != nil {
-					Fail("Could not list the files in tmp/net.d")
-				}
-				for _, file := range files {
-					names = append(names, file.Name())
-				}
-
-				Expect(names).To(ContainElement("calico"))
-				Expect(names).To(ContainElement("calico-ipam"))
-				Expect(names).To(ContainElement("10-calico.conf"))
-			})
-			It("Should parse and output a templated config", func() {
-				err := runCniContainer()
-				Expect(err).NotTo(HaveOccurred())
-				expectFilesEqual("expected_10-calico.conf", "tmp/net.d/10-calico.conf")
-			})
-		})
-
-		Context("With modified env vars", func() {
-			It("Should rename '10-calico.conf' to '10-calico.conflist'", func() {
-				err := runCniContainer("-e", "CNI_CONF_NAME=10-calico.conflist")
-				Expect(err).NotTo(HaveOccurred())
-
-				expectFilesEqual("expected_10-calico.conf", "tmp/net.d/10-calico.conflist")
-			})
-		})
-
-		It("should use CNI_NETWORK_CONFIG", func() {
-			err := runCniContainer(
-				"-e", "CNI_NETWORK_CONFIG=filecontents",
-			)
+	Context("Install with default values", func() {
+		It("Should install bins and config", func() {
+			err := runCniContainer(tempDir)
 			Expect(err).NotTo(HaveOccurred())
 
-			actual, err := ioutil.ReadFile("tmp/net.d/10-calico.conf")
-			Expect(err).NotTo(HaveOccurred())
-			Expect(string(actual)).To(Equal("filecontents\n"))
-		})
-
-		It("should use CNI_NETWORK_CONFIG_FILE over CNI_NETWORK_CONFIG", func() {
-			err := runCniContainer(
-				"-e", "CNI_NETWORK_CONFIG='oops, I used the CNI_NETWORK_CONFIG'",
-				"-e", "CNI_NETWORK_CONFIG_FILE=/template/calico.conf.alternate",
-			)
-			Expect(err).NotTo(HaveOccurred())
-
-			expectFilesEqual("expected_10-calico.conf.alternate", "tmp/net.d/10-calico.conf")
-		})
-
-		Context("copying /calico-secrets", func() {
-			err := os.MkdirAll("tmp/certs", 0755)
-			if err != nil {
-				Fail("Failed to create directory tmp/bin")
+			// Get a list of files in the defualt CNI bin location.
+			files, err := ioutil.ReadDir(tempDir + "/bin")
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Could not list the files in %s/bin", tempDir))
+			names := []string{}
+			for _, file := range files {
+				names = append(names, file.Name())
 			}
 
-			It("Should not crash or copy when having a hidden file", func() {
-				err = ioutil.WriteFile("tmp/certs/.hidden", []byte("doesn't matter"), 0755)
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
+			// Get a list of files in the default location for CNI config.
+			files, err = ioutil.ReadDir(tempDir + "/net.d")
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Could not list the files in %s/net.d", tempDir))
+			for _, file := range files {
+				names = append(names, file.Name())
+			}
 
-				cwd, _ := os.Getwd()
-				err = runCniContainer("-v", cwd+"/tmp/certs:/calico-secrets")
-				Expect(err).NotTo(HaveOccurred())
-				_, err = os.Open("tmp/net.d/calico-tls/.hidden")
-				Expect(err).To(HaveOccurred())
-			})
-			It("Should copy a non-hidden file", func() {
-				err = ioutil.WriteFile("tmp/certs/nothidden", []byte("doesn't matter"), 0755)
-				Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
+			Expect(names).To(ContainElement("calico"))
+			Expect(names).To(ContainElement("calico-ipam"))
+			Expect(names).To(ContainElement("10-calico.conflist"))
+		})
 
-				cwd, _ := os.Getwd()
-				err = runCniContainer("-v", cwd+"/tmp/certs:/calico-secrets")
-				Expect(err).NotTo(HaveOccurred())
-				_, err = os.Open("tmp/net.d/calico-tls/nothidden")
-				Expect(err).NotTo(HaveOccurred())
-			})
+		It("Should parse and output a templated config", func() {
+			err := runCniContainer(tempDir)
+			Expect(err).NotTo(HaveOccurred())
+			expectFileContents(tempDir+"/net.d/10-calico.conflist", expectedDefaultConfig)
+		})
+	})
+
+	It("should support CNI_CONF_NAME", func() {
+		err := runCniContainer(tempDir, "-e", "CNI_CONF_NAME=20-calico.conflist")
+		Expect(err).NotTo(HaveOccurred())
+		expectFileContents(tempDir+"/net.d/20-calico.conflist", expectedDefaultConfig)
+	})
+
+	It("should support a custom CNI_NETWORK_CONFIG", func() {
+		err := runCniContainer(tempDir, "-e", "CNI_NETWORK_CONFIG=filecontents")
+		Expect(err).NotTo(HaveOccurred())
+		actual, err := ioutil.ReadFile(tempDir + "/net.d/10-calico.conflist")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(actual)).To(Equal("filecontents"))
+	})
+
+	It("should use CNI_NETWORK_CONFIG_FILE over CNI_NETWORK_CONFIG", func() {
+		// Write the alternate configuration to disk so it can be picked up by
+		// the CNI container.
+		altConfigFile := tempDir + "/net.d/alternate-config"
+		err := ioutil.WriteFile(altConfigFile, []byte(expectedAlternateConfig), 0755)
+		Expect(err).NotTo(HaveOccurred())
+		err = runCniContainer(
+			tempDir,
+			"-e", "CNI_NETWORK_CONFIG='oops, I used the CNI_NETWORK_CONFIG'",
+			"-e", "CNI_NETWORK_CONFIG_FILE=/host/etc/cni/net.d/alternate-config",
+		)
+		Expect(err).NotTo(HaveOccurred())
+		expectFileContents(tempDir+"/net.d/10-calico.conflist", expectedAlternateConfig)
+	})
+
+	Context("copying /calico-secrets", func() {
+		var err error
+		BeforeEach(func() {
+			err = os.MkdirAll(tempDir+"/certs", 0755)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		It("Should not crash or copy when having a hidden file", func() {
+			err = ioutil.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0755)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
+			err = runCniContainer(tempDir, "-v", tempDir+"/certs:/calico-secrets")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Open(tempDir + "/net.d/calico-tls/.hidden")
+			Expect(err).To(HaveOccurred())
+		})
+		It("Should copy a non-hidden file", func() {
+			err = ioutil.WriteFile(tempDir+"/certs/nothidden", []byte("doesn't matter"), 0755)
+			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
+			err = runCniContainer(tempDir, "-v", tempDir+"/certs:/calico-secrets")
+			Expect(err).NotTo(HaveOccurred())
+			_, err = os.Open(tempDir + "/net.d/calico-tls/nothidden")
+			Expect(err).NotTo(HaveOccurred())
 		})
 	})
 })
@@ -219,7 +248,13 @@ func expectFilesEqual(filenameExpected, filenameActual string) {
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to read expected file "+filenameExpected)
 	actual, err := ioutil.ReadFile(filenameActual)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to read actual file "+filenameActual)
-
 	ExpectWithOffset(1, actual).To(Equal(expected), fmt.Sprintf(
 		"actual file (%s) differed from expected file (%s)", filenameActual, filenameExpected))
+}
+
+func expectFileContents(filename, expected string) {
+	actual, err := ioutil.ReadFile(filename)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "failed to read file "+filename)
+	ExpectWithOffset(1, string(actual)).To(Equal(expected), fmt.Sprintf(
+		"actual file (%s) differed from expected contents", filename))
 }

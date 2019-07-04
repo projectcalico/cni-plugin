@@ -142,7 +142,7 @@ clean:
 ###############################################################################
 # Building the binary
 ###############################################################################
-build: $(BIN)/calico $(BIN)/calico-ipam
+build: $(BIN)/install
 build-all: $(addprefix sub-build-,$(VALIDARCHES))
 sub-build-%:
 	$(MAKE) build ARCH=$*
@@ -187,8 +187,14 @@ update-libcalico:
 	      glide up --strip-vendor || glide up --strip-vendor; \
 	    fi'
 
+$(BIN)/calico-ipam: $(BIN)/install
+	cp $(BIN)/install $(BIN)/calico-ipam
+	
+$(BIN)/calico: $(BIN)/install
+	cp $(BIN)/install $(BIN)/install
+	
 ## Build the Calico network plugin and ipam plugins
-$(BIN)/calico $(BIN)/calico-ipam: $(SRC_FILES) vendor
+$(BIN)/install binary: $(SRC_FILES) vendor
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
 	-e ARCH=$(ARCH) \
@@ -200,9 +206,7 @@ $(BIN)/calico $(BIN)/calico-ipam: $(SRC_FILES) vendor
 	$(LOCAL_BUILD_MOUNTS) \
 	-w /go/src/$(PACKAGE_NAME) \
 	-e GOCACHE=/go-cache \
-	    $(CALICO_BUILD) sh -c '\
-	        go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico && \
-	        go build -v -o $(BIN)/calico-ipam -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico-ipam'
+	    $(CALICO_BUILD) sh -c 'go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico'
 
 ###############################################################################
 # Building the image
