@@ -1,4 +1,4 @@
-package scripts_test
+package install_test
 
 import (
 	. "github.com/onsi/ginkgo"

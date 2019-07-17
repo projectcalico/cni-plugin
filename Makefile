@@ -136,7 +136,7 @@ LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) bin/github vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache k8s-install/scripts/install_cni.test
+	rm -rf $(BIN) bin/github vendor $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test
 	rm -f *.created
 
 ###############################################################################
@@ -336,7 +336,7 @@ ut-datastore:
 	$(LOCAL_BUILD_MOUNTS) \
 	$(CALICO_BUILD) sh -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
-			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
+			ginkgo -cover -r -skipPackage vendor -skipPackage pkg/install/ $(GINKGO_ARGS)'
 
 ut-etcd: run-k8s-controller build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
@@ -411,7 +411,7 @@ stop-etcd:
 ###############################################################################
 # We pre-build the test binary so that we can run it outside a container and allow it
 # to interact with docker.
-k8s-install/scripts/install_cni.test: vendor k8s-install/scripts/*.go
+pkg/install/install.test: vendor pkg/install/*.go
 	-mkdir -p .go-pkg-cache
 	docker run --rm \
 	-e LOCAL_USER_ID=$(LOCAL_USER_ID) \
@@ -419,12 +419,12 @@ k8s-install/scripts/install_cni.test: vendor k8s-install/scripts/*.go
 	-v $(CURDIR)/.go-pkg-cache:/go/pkg/:rw \
 		$(CALICO_BUILD) sh -c '\
 			cd /go/src/$(PACKAGE_NAME) && \
-			go test ./k8s-install/scripts -c --tags install_cni_test -o ./k8s-install/scripts/install_cni.test'
+			go test ./pkg/install -c --tags install_test -o ./pkg/install/install.test'
 
 .PHONY: test-install-cni
 ## Test the install-cni.sh script
-test-install-cni: image k8s-install/scripts/install_cni.test
-	cd k8s-install/scripts && CONTAINER_NAME=$(BUILD_IMAGE) ./install_cni.test
+test-install-cni: image pkg/install/install.test
+	cd pkg/install && CONTAINER_NAME=$(BUILD_IMAGE) ./install.test
 
 ###############################################################################
 # CI/CD
