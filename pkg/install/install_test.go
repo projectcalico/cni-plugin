@@ -152,8 +152,8 @@ PuB/TL+u2y+iQUyXxLy3
 
 	AfterEach(func() {
 		// Remove all contents of the temp directory.
-		err := os.RemoveAll(tempDir)
-		Expect(err).NotTo(HaveOccurred())
+		// err := os.RemoveAll(tempDir)
+		// Expect(err).NotTo(HaveOccurred())
 	})
 
 	Context("Install with default values", func() {
@@ -225,7 +225,7 @@ PuB/TL+u2y+iQUyXxLy3
 		})
 
 		It("Should not crash or copy when having a hidden file", func() {
-			err = ioutil.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0755)
+			err = ioutil.WriteFile(tempDir+"/certs/.hidden", []byte("doesn't matter"), 0777)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
 			err = runCniContainer(tempDir, "-v", tempDir+"/certs:/calico-secrets")
 			Expect(err).NotTo(HaveOccurred())
@@ -233,11 +233,11 @@ PuB/TL+u2y+iQUyXxLy3
 			Expect(err).To(HaveOccurred())
 		})
 		It("Should copy a non-hidden file", func() {
-			err = ioutil.WriteFile(tempDir+"/certs/nothidden", []byte("doesn't matter"), 0755)
+			err = ioutil.WriteFile(tempDir+"/certs/etcd-ca", []byte("doesn't matter"), 0777)
 			Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed to write hidden file: %v", err))
 			err = runCniContainer(tempDir, "-v", tempDir+"/certs:/calico-secrets")
 			Expect(err).NotTo(HaveOccurred())
-			_, err = os.Open(tempDir + "/net.d/calico-tls/nothidden")
+			_, err = os.Open(tempDir + "/net.d/calico-tls/etcd-ca")
 			Expect(err).NotTo(HaveOccurred())
 		})
 	})

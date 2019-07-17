@@ -20,9 +20,6 @@ type config struct {
 	CNINetDir   string `envconfig:"CNI_NET_DIR" default:"/etc/cni/net.d"`
 	CNIConfName string `envconfig:"CNI_CONF_NAME"`
 
-	// Location on the host where etcd secrets are located. Referenced by the CNI config.
-	HostSecretsDir string
-
 	// Directory where we expect that TLS assets will be mounted into the calico/cni container.
 	TLSAssetsDir string `envconfig:"TLS_ASSETS_DIR"`
 
@@ -51,6 +48,14 @@ func getEnv(env, def string) string {
 	return def
 }
 
+func directoryExists(dir string) bool {
+	info, err := os.Stat(dir)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return info.IsDir()
+}
+
 func fileExists(file string) bool {
 	info, err := os.Stat(file)
 	if os.IsNotExist(err) {
@@ -59,11 +64,21 @@ func fileExists(file string) bool {
 	return !info.IsDir()
 }
 
+func mkdir(path string) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		os.MkdirAll(path, os.ModeDir)
+	}
+}
+
 func loadConfig() config {
 	var c config
 	err := envconfig.Process("", &c)
 	if err != nil {
 		logrus.Fatal(err.Error())
+	}
+
+	if c.TLSAssetsDir == "" {
+		c.TLSAssetsDir = "/calico-secrets"
 	}
 
 	return c
@@ -95,12 +110,19 @@ func Install() error {
 
 	// Copy over any TLS assets from the SECRETS_MOUNT_DIR to the host.
 	// First check if the dir exists and has anything in it.
-	// if [ "$(ls "${SECRETS_MOUNT_DIR}" 3>/dev/null)" ];
-	// then
-	//   echo "Installing any TLS assets from ${SECRETS_MOUNT_DIR}"
-	//   mkdir -p /host/etc/cni/net.d/calico-tls
-	//   cp -p "${SECRETS_MOUNT_DIR}"/* /host/etc/cni/net.d/calico-tls/
-	// fi
+	if directoryExists(c.TLSAssetsDir) {
+		logrus.Info("Installing any TLS assets")
+		mkdir("/host/etc/cni/net.d/calico-tls")
+		if err := copyFile(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-ca"), "/host/etc/cni/net.d/calico-tls/etcd-ca"); err != nil {
+			logrus.Warnf("Missing etcd-ca")
+		}
+		if err := copyFile(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-cert"), "/host/etc/cni/net.d/calico-tls/etcd-cert"); err != nil {
+			logrus.Warnf("Missing etcd-cert")
+		}
+		if err := copyFile(fmt.Sprintf("%s/%s", c.TLSAssetsDir, "etcd-key"), "/host/etc/cni/net.d/calico-tls/etcd-key"); err != nil {
+			logrus.Warnf("Missing etcd-key")
+		}
+	}
 
 	// # If the TLS assets actually exist, update the variables to populate into the
 	// # CNI network config.  Otherwise, we'll just fill that in with blanks.
@@ -211,6 +233,14 @@ func writeCNIConfig(c config) {
 	netconf = strings.Replace(netconf, "__KUBERNETES_NODE_NAME__", getEnv("NODENAME", nodename), -1)
 	netconf = strings.Replace(netconf, "__KUBECONFIG_FILEPATH__", "/etc/cni/net.d/calico-kubeconfig", -1)
 	netconf = strings.Replace(netconf, "__CNI_MTU__", getEnv("CNI_MTU", "1500"), -1)
+
+	// Replace etcd datastore variables.
+	hostSecretsDir := c.CNINetDir + "/calico-tls"
+	netconf = strings.Replace(netconf, "__ETCD_CERT_FILE__", fmt.Sprintf("%s/etcd-cert", hostSecretsDir), -1)
+	netconf = strings.Replace(netconf, "__ETCD_CA_CERT_FILE__", fmt.Sprintf("%s/etcd-ca", hostSecretsDir), -1)
+	netconf = strings.Replace(netconf, "__ETCD_KEY_FILE__", fmt.Sprintf("%s/etcd-key", hostSecretsDir), -1)
+	netconf = strings.Replace(netconf, "__ETCD_ENDPOINTS__", getEnv("ETCD_ENDPOINTS", ""), -1)
+	netconf = strings.Replace(netconf, "__ETCD_DISCOVERY_SRV__", getEnv("ETCD_DISCOVERY_SRV", ""), -1)
 
 	// Write out the file.
 	name := getEnv("CNI_CONF_NAME", "10-calico.conflist")
