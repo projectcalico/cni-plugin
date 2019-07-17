@@ -66,7 +66,9 @@ func fileExists(file string) bool {
 
 func mkdir(path string) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
-		os.MkdirAll(path, os.ModeDir)
+		if err = os.MkdirAll(path, os.ModeDir); err != nil {
+			logrus.WithError(err).Fatalf("Failed to create directory %s", path)
+		}
 	}
 }
 
@@ -86,9 +88,15 @@ func loadConfig() config {
 
 func Install() error {
 	// Clean up any existing binaries / config / assets.
-	os.Remove("/host/opt/cni/bin/calico")
-	os.Remove("/host/opt/cni/bin/calico-ipam")
-	os.RemoveAll("/host/etc/cni/net.d/calico-tls")
+	if err := os.Remove("/host/opt/cni/bin/calico"); err != nil {
+		logrus.WithError(err).Warnf("Error removing old plugin")
+	}
+	if err := os.Remove("/host/opt/cni/bin/calico-ipam"); err != nil {
+		logrus.WithError(err).Warnf("Error removing old IPAM plugin")
+	}
+	if err := os.RemoveAll("/host/etc/cni/net.d/calico-tls"); err != nil {
+		logrus.WithError(err).Warnf("Error removing old TLS directory")
+	}
 
 	// Load config.
 	c := loadConfig()
@@ -301,7 +309,12 @@ func copyFileContents(src, dst string) (err error) {
 	if err != nil {
 		return
 	}
-	defer in.Close()
+	defer func() {
+		err := in.Close()
+		if err != nil {
+			logrus.WithError(err).Fatalf("failed to close file: %s", src)
+		}
+	}()
 	out, err := os.Create(dst)
 	if err != nil {
 		return
