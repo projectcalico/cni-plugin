@@ -45,12 +45,13 @@ func runCniContainer(extraArgs ...string) error {
 		"-v", cwd + "/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
 	}
 	args = append(args, extraArgs...)
-	image := fmt.Sprintf("%s", os.Getenv("CONTAINER_NAME"))
-	args = append(args, image, "/install-cni.sh")
+	args = append(args, os.Getenv("CONTAINER_NAME"), "/install-cni.sh")
 
 	out, err = exec.Command("docker", args...).CombinedOutput()
-	GinkgoWriter.Write(out)
-
+	_, writeErr := GinkgoWriter.Write(out)
+	if writeErr != nil {
+		Fail(fmt.Sprintf("GinkgoWriter failed to write: %v\n", writeErr))
+	}
 	return err
 }
 
@@ -71,7 +72,7 @@ func cleanup() {
 		"-v", cwd + "/tmp/bin:/host/opt/cni/bin",
 		"-v", cwd + "/tmp/net.d:/host/etc/cni/net.d",
 		"-v", cwd + "/tmp/serviceaccount:/var/run/secrets/kubernetes.io/serviceaccount",
-		fmt.Sprintf("%s", os.Getenv("CONTAINER_NAME")),
+		os.Getenv("CONTAINER_NAME"),
 		"sh", "-c", "rm -rf /host/opt/cni/bin/* /host/etc/cni/net.d/*",
 	}
 
