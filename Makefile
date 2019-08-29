@@ -508,6 +508,10 @@ endif
 
 ## Verifies the release artifacts produces by `make release-build` are correct.
 release-verify: release-prereqs
+	# go.sum can sometimes be updated as part of the build. However, we don't care about those changes when verifying 
+	# a release, so ignore them here.
+	git checkout go.sum
+
 	# Check the reported version is correct for each release artifact.
 	docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) calico -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) calico -v` "\nExpected version: $(VERSION)" && exit 1 )
 	docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION) || ( echo "Reported version:" `docker run --rm $(BUILD_IMAGE):$(VERSION)-$(ARCH) calico-ipam -v | grep -x $(VERSION)` "\nExpected version: $(VERSION)" && exit 1 )
