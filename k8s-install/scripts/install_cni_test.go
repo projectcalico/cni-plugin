@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 var secretFile = "tmp/serviceaccount/token"
@@ -50,7 +52,7 @@ func runCniContainer(extraArgs ...string) error {
 	out, err = exec.Command("docker", args...).CombinedOutput()
 	_, writeErr := GinkgoWriter.Write(out)
 	if writeErr != nil {
-		Fail(fmt.Sprintf("GinkgoWriter failed to write: %v\n", writeErr))
+		log.WithField("out", out).WithError(writeErr).Warn("GinkgoWriter failed to write output from command.")
 	}
 	return err
 }
