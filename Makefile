@@ -224,8 +224,8 @@ $(BIN)/calico $(BIN)/calico-ipam: local_build $(SRC_FILES)
 	$(DOCKER_RUN) \
 	-v $(CURDIR)/$(BIN):/go/src/$(PACKAGE_NAME)/$(BIN):rw \
 	    $(CALICO_BUILD) sh -c '\
-		go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico && \
-		go build -v -o $(BIN)/calico-ipam -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico-ipam'
+		go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(BUILD_FLAGS) ./cmd/calico && \
+		go build -v -o $(BIN)/calico-ipam -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(BUILD_FLAGS) ./cmd/calico-ipam'
 
 ###############################################################################
 # Building the image
@@ -448,6 +448,10 @@ test-install-cni: image k8s-install/scripts/install_cni.test
 .PHONY: ci
 ## Run what CI runs
 ci: clean static-checks test-cni-versions image-all test-install-cni
+
+# Run -mod=readonly in CI for reproducible builds. If this fails, it's likely the PR has not included 
+ci: BUILD_FLAGS = -mod=readonly
+cd: BUILD_FLAGS = -mod=readonly
 
 ## Deploys images to registry
 cd:
