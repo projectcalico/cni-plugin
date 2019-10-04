@@ -162,8 +162,6 @@ ifeq ($(BUILDARCH),amd64)
 	ETCD_CONTAINER=quay.io/coreos/etcd:$(ETCD_VER)
 endif
 
-LIBCALICOGO_PATH?=none
-
 LOCAL_USER_ID?=$(shell id -u $$USER)
 
 .PHONY: clean
