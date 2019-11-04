@@ -17,6 +17,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/cni-plugin/dataplane/linux"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -725,7 +726,7 @@ var _ = Describe("CalicoCni", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				By("setting up the same route CNI plugin installed in the initial run for the hostVeth")
-				err = utils.SetupRoutes(hostVeth, result)
+				err = linux.SetupRoutes(hostVeth, result)
 				Expect(err).NotTo(HaveOccurred())
 
 				_, err = testutils.DeleteContainerWithId(netconf, contNs.Path(), "", testutils.TEST_DEFAULT_NS, containerID)

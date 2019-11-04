@@ -27,6 +27,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
+	"github.com/projectcalico/cni-plugin/dataplane"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -364,9 +365,14 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		utils.ReleaseIPAllocation(logger, conf, args)
 	}
 
+	d, err := dataplane.GetDataplane(conf, logger)
+	if err != nil {
+		return nil, err
+	}
+
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	hostVethName := k8sconversion.VethNameForWorkload(epIDs.Namespace, epIDs.Pod)
-	_, contVethMac, err := utils.DoNetworking(args, conf, result, logger, hostVethName, routes)
+	_, contVethMac, err := d.DoNetworking(args, result, hostVethName, routes)
 	if err != nil {
 		logger.WithError(err).Error("Error setting up networking")
 		releaseIPAM()
@@ -470,9 +476,14 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		}
 	}
 
+	d, err := dataplane.GetDataplane(conf, logger)
+	if err != nil {
+		return err
+	}
+
 	// Clean up namespace by removing the interfaces.
 	logger.Info("Cleaning up netns")
-	err = utils.CleanUpNamespace(args, logger)
+	err = d.CleanUpNamespace(args)
 	if err != nil {
 		return err
 	}
