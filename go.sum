@@ -188,6 +188,8 @@ github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052 h1:R/kB
 github.com/projectcalico/libcalico-go v0.0.0-20190920181452-f4749162e052/go.mod h1:UhwqglrBKH97bgKjpmQM76rT8FZPbGsNuMIQ+tCao6I=
 github.com/projectcalico/libcalico-go v0.0.0-20191008172221-1ba69f71d8c4 h1:LWhM2G99jjqxB/8AEwA+nmkhsC4GZs/DjRldW/SVD6k=
 github.com/projectcalico/libcalico-go v0.0.0-20191008172221-1ba69f71d8c4/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
+github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe h1:nu96Y/l6FMPB8L/MW0PMXdAFpZucmWdkK7ErRKv0vbk=
+github.com/projectcalico/libcalico-go v0.0.0-20191104214504-aa6a608ee1fe/go.mod h1:tUt8rirmysRy7TR1S80XDriwBK1z2igwwX79lnUrSf4=
 github.com/projectcalico/libcalico-go v1.7.3 h1:qcbxAhsq/5zqZqpHE24VqMHfmoBVdXZV0Kf82+5rbqU=
 github.com/projectcalico/libcalico-go v3.9.0-0.dev.0.20190813183411-9f88ebd570c5+incompatible h1:5qoEEaGXcjnqSWBQW315/eZukYxKA3U/GRzX3v+CrUg=
 github.com/projectcalico/libcalico-go v3.9.0-0.dev.0.20190813183411-9f88ebd570c5+incompatible/go.mod h1:0b/n/rPzNXjhn4ywFcEJuQdA/5olt9UxFIATz57xkbc=
