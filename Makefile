@@ -353,19 +353,3 @@ run-kube-proxy:
 test-watch: $(BIN)/calico $(BIN)/calico-ipam run-etcd run-k8s-apiserver
 	# The tests need to run as root
 	CGO_ENABLED=0 ETCD_IP=127.0.0.1 PLUGIN=calico GOPATH=$(GOPATH) $(shell which ginkgo) watch -skipPackage k8s-install -skipPackage vendor
-
-.PHONY: help
-help: # Some kind of magic from https://gist.github.com/rcmachado/af3db315e31383502660
-	$(info Available targets)
-	@awk '/^[a-zA-Z\-\_0-9\/]+:/ {				      \
-		nb = sub( /^## /, "", helpMsg );				\
-		if(nb == 0) {						   \
-			helpMsg = $$0;					      \
-			nb = sub( /^[^:]*:.* ## /, "", helpMsg );		   \
-		}							       \
-		if (nb)							 \
-			printf "\033[1;31m%-" width "s\033[0m %s\n", $$1, helpMsg;  \
-	}								   \
-	{ helpMsg = $$0 }'						  \
-	width=20							    \
-	$(MAKEFILE_LIST)
