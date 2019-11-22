@@ -2,7 +2,9 @@ PACKAGE_NAME=github.com/projectcalico/cni-plugin
 GO_BUILD_VER=v0.27
 
 ###############################################################################
-# Download and include Makefile.common before anything else
+# Download and include Makefile.common
+#   Additions to EXTRA_DOCKER_ARGS need to happen before the include since
+#   that variable is evaluated when we declare DOCKER_RUN and siblings.
 ###############################################################################
 MAKE_BRANCH?=$(GO_BUILD_VER)
 MAKE_REPO?=https://raw.githubusercontent.com/projectcalico/go-build/$(MAKE_BRANCH)
@@ -15,22 +17,20 @@ Makefile.common.$(MAKE_BRANCH): $(WGET)
 	rm -f Makefile.common.*
 	$(WGET) -nv $(MAKE_REPO)/Makefile.common -O "$@"
 
+# Build mounts for running in "local build" mode. This allows an easy build using local development code,
+# assuming that there is a local checkout of libcalico in the same directory as this repo.
+ifdef LOCAL_BUILD
+PHONY: set-up-local-build
+LOCAL_BUILD_DEP:=set-up-local-build
+
+EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
+$(LOCAL_BUILD_DEP):
+	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
+endif
+
 include Makefile.common
 
 ###############################################################################
-
-# Build mounts for running in "local build" mode. This allows an easy build using local development code,
-# assuming that there is a local checkout of libcalico in the same directory as this repo.
-PHONY:local_build
-
-ifdef LOCAL_BUILD
-EXTRA_DOCKER_ARGS+=-v $(CURDIR)/../libcalico-go:/go/src/github.com/projectcalico/libcalico-go:rw
-local_build:
-	$(DOCKER_RUN) $(CALICO_BUILD) go mod edit -replace=github.com/projectcalico/libcalico-go=../libcalico-go
-else
-local_build:
-	@echo "Building cni-plugin"
-endif
 
 # fail if unable to download
 CURL=curl -C - -sSf
@@ -70,7 +70,7 @@ update-pins: update-libcalico-pin
 ###############################################################################
 ## Build the Calico network plugin and ipam plugins
 BIN=bin/$(ARCH)
-$(BIN)/calico $(BIN)/calico-ipam: local_build $(SRC_FILES)
+$(BIN)/calico $(BIN)/calico-ipam: $(LOCAL_BUILD_DEP) $(SRC_FILES)
 	$(DOCKER_RUN) $(CALICO_BUILD) sh -c '\
 		go build -v -o $(BIN)/calico -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico && \
 		go build -v -o $(BIN)/calico-ipam -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" ./cmd/calico-ipam'
@@ -111,7 +111,7 @@ ut: run-k8s-controller build $(BIN)/host-local
 	$(MAKE) ut-datastore DATASTORE_TYPE=etcdv3
 	$(MAKE) ut-datastore DATASTORE_TYPE=kubernetes
 
-ut-datastore: local_build
+ut-datastore: $(LOCAL_BUILD_DEP)
 	# The tests need to run as root
 	docker run --rm -t --privileged --net=host \
 	-e ETCD_IP=$(LOCAL_IP_ENV) \
