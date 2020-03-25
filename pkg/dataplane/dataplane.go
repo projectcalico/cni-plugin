@@ -20,8 +20,8 @@ import (
 
 	"github.com/containernetworking/cni/pkg/skel"
 	"github.com/containernetworking/cni/pkg/types/current"
-	"github.com/projectcalico/cni-plugin/dataplane/grpc"
-	"github.com/projectcalico/cni-plugin/dataplane/linux"
+	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc"
+	"github.com/projectcalico/cni-plugin/pkg/dataplane/linux"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	"github.com/sirupsen/logrus"
 )
