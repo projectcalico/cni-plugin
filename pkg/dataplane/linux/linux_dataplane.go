@@ -26,7 +26,6 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
@@ -52,15 +51,9 @@ func (d *linuxDataplane) DoNetworking(
 	desiredVethName string,
 	routes []*net.IPNet,
 ) (hostVethName, contVethMAC string, err error) {
-	// Select the first 11 characters of the containerID for the host veth.
-	hostVethName = "cali" + args.ContainerID[:utils.Min(11, len(args.ContainerID))]
+	hostVethName = desiredVethName
 	contVethName := args.IfName
 	var hasIPv4, hasIPv6 bool
-
-	// If a desired veth name was passed in, use that instead.
-	if desiredVethName != "" {
-		hostVethName = desiredVethName
-	}
 
 	d.logger.Infof("Setting the host side veth name to %s", hostVethName)
 

@@ -347,7 +347,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 				return err
 			}
 
-			hostVethName, contVethMac, err := d.DoNetworking(args, result, "", utils.DefaultRoutes)
+			// Select the first 11 characters of the containerID for the host veth.
+			desiredVethName := "cali" + args.ContainerID[:utils.Min(11, len(args.ContainerID))]
+			hostVethName, contVethMac, err := d.DoNetworking(args, result, desiredVethName, utils.DefaultRoutes)
 			if err != nil {
 				// Cleanup IP allocation and return the error.
 				utils.ReleaseIPAllocation(logger, conf, args)
