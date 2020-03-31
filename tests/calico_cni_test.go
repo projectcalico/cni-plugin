@@ -404,8 +404,8 @@ var _ = Describe("CalicoCni", func() {
 			message := <-grpcBackend.Received
 			addRequest, ok := message.(*proto.AddRequest)
 			Expect(ok).Should(BeTrue())
-			Expect(addRequest.GetNetns()).Should(Equal(contNs.Path()))
-			Expect(len(addRequest.GetContainerIps())).Should(BeNumerically(">=", 1))
+			Expect(addRequest.Netns).Should(Equal(contNs.Path()))
+			Expect(len(addRequest.ContainerIps)).Should(BeNumerically(">=", 1))
 
 			By("erroring if the backend fails to cleanup an interface")
 			grpcBackend.SetResult(false)
@@ -424,7 +424,7 @@ var _ = Describe("CalicoCni", func() {
 			message = <-grpcBackend.Received
 			delRequest, ok := message.(*proto.DelRequest)
 			Expect(ok).Should(BeTrue())
-			Expect(delRequest.GetNetns()).Should(Equal(contNs.Path()))
+			Expect(delRequest.Netns).Should(Equal(contNs.Path()))
 
 			By("erroring if the backend fails to configure an interface")
 			grpcBackend.SetResult(false)

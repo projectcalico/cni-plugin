@@ -95,9 +95,9 @@ func (d *grpcDataplane) DoNetworking(
 		return "", "", err
 	}
 	if !reply.GetSuccessful() {
-		return reply.GetInterfaceName(), reply.GetContainerMac(), fmt.Errorf("grpc dataplane error: %s", reply.GetErrorMessage())
+		return reply.HostInterfaceName, reply.ContainerMac, fmt.Errorf("grpc dataplane error: %s", reply.GetErrorMessage())
 	}
-	return reply.GetInterfaceName(), reply.GetContainerMac(), nil
+	return reply.HostInterfaceName, reply.ContainerMac, nil
 }
 
 func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
@@ -120,8 +120,8 @@ func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 		d.logger.Errorf("request to grpc dataplane failed : %v", err)
 		return err
 	}
-	if !reply.GetSuccessful() {
-		return fmt.Errorf("grpc dataplane error: %s", reply.GetErrorMessage())
+	if !reply.Successful {
+		return fmt.Errorf("grpc dataplane error: %s", reply.ErrorMessage)
 	}
 	return nil
 }

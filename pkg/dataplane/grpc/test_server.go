@@ -41,9 +41,9 @@ func (s *TestServer) Add(ctx context.Context, in *pb.AddRequest) (*pb.AddReply, 
 	in2 := proto.Clone(in)
 	s.Received <- in2
 	out := &pb.AddReply{
-		Successful:    s.retval,
-		InterfaceName: in.DesiredHostInterfaceName,
-		ContainerMac:  s.contMac,
+		Successful:        s.retval,
+		HostInterfaceName: in.DesiredHostInterfaceName,
+		ContainerMac:      s.contMac,
 	}
 	// Create an unconfigured veth just to make the test code happy
 	if s.retval {

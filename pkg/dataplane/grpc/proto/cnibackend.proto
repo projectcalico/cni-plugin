@@ -29,7 +29,7 @@ message IPConfig {
 message AddReply {
     bool successful = 1;
     string error_message = 2;
-    string interface_name = 3;
+    string host_interface_name = 3;
     string container_mac = 4;
 }
 
