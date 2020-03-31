@@ -23,6 +23,7 @@ import (
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc"
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/linux"
 	"github.com/projectcalico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/sirupsen/logrus"
 )
 
@@ -32,6 +33,8 @@ type Dataplane interface {
 		result *current.Result,
 		desiredVethName string,
 		routes []*net.IPNet,
+		endpoint *api.WorkloadEndpoint,
+		annotations map[string]string,
 	) (hostVethName, contVethMAC string, err error)
 
 	CleanUpNamespace(args *skel.CmdArgs) error

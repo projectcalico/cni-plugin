@@ -27,6 +27,7 @@ import (
 	"github.com/containernetworking/plugins/pkg/ip"
 	"github.com/containernetworking/plugins/pkg/ns"
 	"github.com/projectcalico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 )
@@ -50,6 +51,8 @@ func (d *linuxDataplane) DoNetworking(
 	result *current.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
+	endpoint *api.WorkloadEndpoint,
+	annotations map[string]string,
 ) (hostVethName, contVethMAC string, err error) {
 	hostVethName = desiredVethName
 	contVethName := args.IfName

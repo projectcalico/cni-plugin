@@ -24,6 +24,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/grpc/proto"
 	"github.com/projectcalico/cni-plugin/pkg/types"
+	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -57,6 +58,8 @@ func (d *grpcDataplane) DoNetworking(
 	result *current.Result,
 	desiredVethName string,
 	routes []*net.IPNet,
+	endpoint *api.WorkloadEndpoint,
+	annotations map[string]string,
 ) (ifName, contTapMAC string, err error) {
 	d.logger.Infof("Connecting to GRPC backend server at %s", d.socket)
 	conn, err := grpc.Dial(d.socket, grpc.WithInsecure())
@@ -76,6 +79,16 @@ func (d *grpcDataplane) DoNetworking(
 		},
 		ContainerIps:    make([]*proto.IPConfig, 0),
 		ContainerRoutes: make([]string, 0),
+		Workload: &proto.WorkloadIDs{
+			Name:         endpoint.Name,
+			Namespace:    endpoint.Namespace,
+			Labels:       endpoint.Labels,
+			Annotations:  annotations,
+			Endpoint:     endpoint.Spec.Endpoint,
+			Node:         endpoint.Spec.Node,
+			Orchestrator: endpoint.Spec.Orchestrator,
+			Pod:          endpoint.Spec.Pod,
+		},
 	}
 	for _, ipConf := range result.IPs {
 		request.ContainerIps = append(request.ContainerIps, &proto.IPConfig{
@@ -85,6 +98,13 @@ func (d *grpcDataplane) DoNetworking(
 	}
 	for _, r := range routes {
 		request.ContainerRoutes = append(request.ContainerRoutes, r.String())
+	}
+	for _, p := range endpoint.Spec.Ports {
+		request.Workload.Ports = append(request.Workload.Ports, &proto.Port{
+			Name:     p.Name,
+			Protocol: p.Protocol.String(),
+			Port:     uint32(p.Port),
+		})
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
