@@ -197,7 +197,8 @@ ut-datastore: $(LOCAL_BUILD_DEP)
 	-e K8S_API_ENDPOINT=http://127.0.0.1:8080 \
 	-e GO111MODULE=on \
 	-v $(CURDIR):/go/src/$(PACKAGE_NAME):rw \
-	$(CALICO_BUILD) sh -c '\
+	--entrypoint sh \
+	$(CALICO_BUILD) -c '\
 			cd  /go/src/$(PACKAGE_NAME) && \
 			ginkgo -cover -r -skipPackage vendor -skipPackage k8s-install $(GINKGO_ARGS)'
 
