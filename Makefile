@@ -1,7 +1,7 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
 GO_BUILD_VER=v0.40
 
-# This needs to be evaluated before the common makefile is included.
+# Test This needs to be evaluated before the common makefile is included.
 # This var contains some default values that the common makefile may append to.
 PUSH_IMAGES?=$(BUILD_IMAGE) quay.io/calico/cni
 
