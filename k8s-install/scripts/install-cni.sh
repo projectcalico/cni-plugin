@@ -94,15 +94,21 @@ do
     cp -f $path $dir/$filename.tmp
     # Adjust security context of temporary file so the move operation below can
     # delete temporary file without violation.
-    if [ -e "/sbin/restorecon" ]; then
-        /sbin/restorecon $dir/$filename.tmp
-    fi
+    for rc in /sbin/restorecon /usr/sbin/restorecon
+    do
+        if [ -e "$rc" ]; then
+            $rc $dir/$filename.tmp
+        fi
+    done
     mv $dir/$filename.tmp $dir/$filename || exit_with_error "Failed to copy $path to $dir. This may be caused by selinux configuration on the host, or something else."
     # Adjust security context of the moved file.
     # This is to make sure that copied binary adapts to the system SELinux policies.
-    if [ -e "/sbin/restorecon" ]; then
-        /sbin/restorecon $dir/$filename
-    fi
+    for rc in /sbin/restorecon /usr/sbin/restorecon
+    do
+        if [ -e "$rc" ]; then
+            $rc $dir/$filename
+        fi
+    done
   done
 
   echo "Wrote Calico CNI binaries to $dir"
