@@ -1992,13 +1992,13 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 			ensureTimestamp(containerID2)
 
-			log.Infof("Sleeping 7 seonds")
+			log.Infof("Sleeping 7 seconds")
 			time.Sleep(time.Second * 7)
 
 			log.Infof("Checking timestamp container 1 %s", containerID1)
 			justDeleted, err := utils.CheckWepJustDeleted(containerID1, 12)
 			Expect(err).ShouldNot(HaveOccurred())
-			Expect(justDeleted).To(Equal(true))
+			//JustDeleted for container1 could vary because it depends on how long it takes to delete container2.
 
 			log.Infof("Checking timestamp container 2 %s", containerID2)
 			justDeleted, err = utils.CheckWepJustDeleted(containerID2, 12)
