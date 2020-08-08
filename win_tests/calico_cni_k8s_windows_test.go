@@ -67,7 +67,10 @@ func deleteNamespace(clientset *kubernetes.Clientset, name string) {
 	}
 }
 
-func updateIPAMStrictAffinity(ctx context.Context, calicoClient client.Interface, enabled bool) {
+func updateIPAMStrictAffinity(calicoClient client.Interface, enabled bool) {
+	// Currently only Linux host is able to update IPAMConfig.
+	// Use os override to fake a linux host.
+	ctx := context.WithValue(context.Background(), "windowsHost", "linux")
 	ipamConfig, err := calicoClient.IPAM().GetIPAMConfig(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -75,10 +78,6 @@ func updateIPAMStrictAffinity(ctx context.Context, calicoClient client.Interface
 
 	err = calicoClient.IPAM().SetIPAMConfig(ctx, *ipamConfig)
 	Expect(err).NotTo(HaveOccurred())
-
-	ipamConfigAgain, err := calicoClient.IPAM().GetIPAMConfig(ctx)
-	Expect(err).NotTo(HaveOccurred())
-	log.Infof("Song get last ipam %v", ipamConfigAgain.StrictAffinity)
 }
 
 var _ = Describe("Kubernetes CNI tests", func() {
@@ -123,7 +122,9 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			caliNode, err := calicoClient.Nodes().Create(context.Background(), caliNode, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create Calico Node resource")
 		}
-		updateIPAMStrictAffinity(context.Background(), calicoClient, true)
+
+		// Force StrictAffinity to be true, otherwise no IP allocation is possible.
+		updateIPAMStrictAffinity(calicoClient, true)
 	})
 
 	utils.ConfigureLogging("info")
