@@ -508,24 +508,3 @@ func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 
 	return nil
 }
-
-// This is a dummy function required for Windows
-func (d *linuxDataplane) NetworkApplicationContainer(args *skel.CmdArgs) error {
-	return nil
-}
-
-func (d *linuxDataplane) EnsureVXLANTunnelAddr(ctx context.Context, calicoClient calicoclient.Interface, nodeName string, ipNet *net.IPNet) error {
-	return nil // No-op on Linux.
-}
-
-func (d *linuxDataplane) MaintainWepDeletionTimestamps(timeout int) error {
-	return nil
-}
-
-func (d *linuxDataplane) CheckWepJustDeleted(containerID string, timeout int) (bool, error) {
-	return false, nil
-}
-
-func (d *linuxDataplane) RegisterDeletedWep(containerID string) error {
-	return nil
-}

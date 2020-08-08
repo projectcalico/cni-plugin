@@ -1881,8 +1881,6 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			"Namespace": testutils.HnsNoneNs,
 		})
 
-		dataplane := windows.NewWindowsDataplane(conf, logger)
-
 		clientset, err = k8s.NewK8sClient(conf, logger)
 		if err != nil {
 			panic(err)
@@ -1945,14 +1943,14 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		ensureTimestamp := func(id string) {
 			log.Infof("Ensure timestamp for pod deletion")
-			t, err := testutils.GetTimestampValue(windows.PodDeletedKey, id)
+			t, err := testutils.GetTimestampValue(utils.PodDeletedKey, id)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(t.Before(time.Now())).To(Equal(true))
 		}
 
 		It("should create pod deletion timestamp in registry", func() {
 			log.Infof("Delete pod deletion subkey")
-			err = testutils.DeleteSubKey(windows.CalicoRegistryKey, windows.PodDeletedKeyString)
+			err = testutils.DeleteSubKey(utils.CalicoRegistryKey, utils.PodDeletedKeyString)
 			Expect(err).NotTo(HaveOccurred())
 
 			log.Infof("Creating container")
@@ -1967,7 +1965,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				ensureTimestamp(containerID)
 			}()
 
-			keyExists, err := testutils.CheckRegistryKeyExists(windows.PodDeletedKey)
+			keyExists, err := testutils.CheckRegistryKeyExists(utils.PodDeletedKey)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(keyExists).To(Equal(true))
 		})
@@ -1998,17 +1996,17 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			time.Sleep(time.Second * 7)
 
 			log.Infof("Checking timestamp container 1 %s", containerID1)
-			justDeleted, err := dataplane.CheckWepJustDeleted(containerID1, 12)
+			justDeleted, err := utils.CheckWepJustDeleted(containerID1, 12)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(justDeleted).To(Equal(true))
 
 			log.Infof("Checking timestamp container 2 %s", containerID2)
-			justDeleted, err = dataplane.CheckWepJustDeleted(containerID2, 12)
+			justDeleted, err = utils.CheckWepJustDeleted(containerID2, 12)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(justDeleted).To(Equal(true))
 
 			log.Infof("Checking timestamp container 3 %s", containerID3)
-			justDeleted, err = dataplane.CheckWepJustDeleted(containerID3, 12)
+			justDeleted, err = utils.CheckWepJustDeleted(containerID3, 12)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(justDeleted).To(Equal(false))
 
@@ -2020,15 +2018,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			// Make sure timeout on pod1, pod2 deletion timestamp. 7+7 > 12
 			log.Infof("Sleeping further 7 seonds")
 			time.Sleep(time.Second * 7)
-			justDeleted, err = dataplane.CheckWepJustDeleted(containerID1, 12)
+			justDeleted, err = utils.CheckWepJustDeleted(containerID1, 12)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(justDeleted).To(Equal(false))
 
-			justDeleted, err = dataplane.CheckWepJustDeleted(containerID2, 12)
+			justDeleted, err = utils.CheckWepJustDeleted(containerID2, 12)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(justDeleted).To(Equal(false))
 
-			justDeleted, err = dataplane.CheckWepJustDeleted(containerID3, 12)
+			justDeleted, err = utils.CheckWepJustDeleted(containerID3, 12)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(justDeleted).To(Equal(true))
 
@@ -2038,13 +2036,13 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).Should(HaveOccurred())
 
 			// first two timestamp are gone
-			_, err = testutils.GetTimestampValue(windows.PodDeletedKey, containerID1)
+			_, err = testutils.GetTimestampValue(utils.PodDeletedKey, containerID1)
 			Expect(err).Should(HaveOccurred())
 
-			_, err = testutils.GetTimestampValue(windows.PodDeletedKey, containerID2)
+			_, err = testutils.GetTimestampValue(utils.PodDeletedKey, containerID2)
 			Expect(err).Should(HaveOccurred())
 
-			_, err = testutils.GetTimestampValue(windows.PodDeletedKey, containerID3)
+			_, err = testutils.GetTimestampValue(utils.PodDeletedKey, containerID3)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 	})
