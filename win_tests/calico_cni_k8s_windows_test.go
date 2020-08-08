@@ -67,6 +67,16 @@ func deleteNamespace(clientset *kubernetes.Clientset, name string) {
 	}
 }
 
+func updateIPAMStrictAffinity(ctx context.Context, calicoClient client.Interface, enabled bool) {
+	ipamConfig, err := calicoClient.IPAM().GetIPAMConfig(ctx)
+	Expect(err).NotTo(HaveOccurred())
+
+	ipamConfig.StrictAffinity = enabled
+
+	err = calicoClient.IPAM().SetIPAMConfig(ctx, *ipamConfig)
+	Expect(err).NotTo(HaveOccurred())
+}
+
 var _ = Describe("Kubernetes CNI tests", func() {
 	var hostname string
 	networkName := "calico-fv"
@@ -109,6 +119,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			caliNode, err := calicoClient.Nodes().Create(context.Background(), caliNode, options.SetOptions{})
 			Expect(err).NotTo(HaveOccurred(), "Failed to create Calico Node resource")
 		}
+		updateIPAMStrictAffinity(context.Background(), calicoClient, true)
 	})
 
 	utils.ConfigureLogging("info")
