@@ -75,6 +75,10 @@ func updateIPAMStrictAffinity(ctx context.Context, calicoClient client.Interface
 
 	err = calicoClient.IPAM().SetIPAMConfig(ctx, *ipamConfig)
 	Expect(err).NotTo(HaveOccurred())
+
+	ipamConfigAgain, err := calicoClient.IPAM().GetIPAMConfig(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	log.Infof("Song get last ipam %v", ipamConfigAgain.StrictAffinity)
 }
 
 var _ = Describe("Kubernetes CNI tests", func() {
