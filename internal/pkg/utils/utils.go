@@ -19,9 +19,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -30,6 +32,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
 	"github.com/sirupsen/logrus"
+	lumberjack "gopkg.in/natefinch/lumberjack.v2"
 
 	"github.com/projectcalico/cni-plugin/internal/pkg/azure"
 	"github.com/projectcalico/cni-plugin/pkg/types"
@@ -684,7 +687,7 @@ func ReleaseIPAllocation(logger *logrus.Entry, conf types.NetConf, args *skel.Cm
 }
 
 // Set up logging for both Calico and libcalico using the provided log level,
-func ConfigureLogging(logLevel string) {
+func ConfigureLogging(logLevel, logFilePath string) {
 	if strings.EqualFold(logLevel, "debug") {
 		logrus.SetLevel(logrus.DebugLevel)
 	} else if strings.EqualFold(logLevel, "info") {
@@ -696,7 +699,27 @@ func ConfigureLogging(logLevel string) {
 		logrus.SetLevel(logrus.WarnLevel)
 	}
 
-	logrus.SetOutput(os.Stderr)
+	writers := []io.Writer{os.Stderr}
+	// Set the log output to write to a log file if specified.
+	if logFilePath != "" {
+		// Create the path for the log file if it does not exist
+		err := os.MkdirAll(filepath.Dir(logFilePath), 0755)
+		if err != nil {
+			logrus.WithError(err).Errorf("Failed to create path for CNI log file: %v", filepath.Dir(logFilePath))
+		}
+
+		// Create file logger with log file rotation. Defaults to rotate once files hit 100 MB.
+		fileLogger := &lumberjack.Logger{
+			Filename: logFilePath,
+			MaxSize:  100,
+		}
+
+		writers = append(writers, fileLogger)
+	}
+
+	mw := io.MultiWriter(writers...)
+
+	logrus.SetOutput(mw)
 }
 
 // ResolvePools takes an array of CIDRs or IP Pool names and resolves it to a slice of pool CIDRs.
