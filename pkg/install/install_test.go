@@ -20,7 +20,7 @@ var expectedDefaultConfig string = `{
   "plugins": [
     {
       "type": "calico",
-      "log_level": "warn",
+      "log_level": "info",
       "datastore_type": "kubernetes",
       "nodename": "my-node",
       "mtu": 1500,
@@ -44,7 +44,7 @@ var expectedAlternateConfig string = `{
     "etcd_key_file": "",
     "etcd_cert_file": "",
     "etcd_ca_cert_file": "",
-    "log_level": "warn",
+    "log_level": "info",
     "ipam": {
         "type": "calico-ipam"
     },
@@ -219,6 +219,14 @@ PuB/TL+u2y+iQUyXxLy3
 		)
 		Expect(err).NotTo(HaveOccurred())
 		expectFileContents(tempDir+"/net.d/10-calico.conflist", expectedAlternateConfig)
+	})
+
+	It("should support LOG_FILE_PATH", func() {
+		err := runCniContainer(tempDir, "-e", fmt.Sprintf("LOG_FILE_PATH=%s/cni/cni.log"))
+		Expect(err).NotTo(HaveOccurred())
+		actual, err := ioutil.ReadFile(tempDir + "/cni/cni.log")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(actual)).NotTo(Equal(""))
 	})
 
 	Context("copying /calico-secrets", func() {
