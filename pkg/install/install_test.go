@@ -20,7 +20,7 @@ var expectedDefaultConfig string = `{
   "plugins": [
     {
       "type": "calico",
-      "log_level": "warn",
+      "log_level": "info",
       "datastore_type": "kubernetes",
       "nodename": "my-node",
       "mtu": 1500,
@@ -44,7 +44,7 @@ var expectedAlternateConfig string = `{
     "etcd_key_file": "",
     "etcd_cert_file": "",
     "etcd_ca_cert_file": "",
-    "log_level": "warn",
+    "log_level": "info",
     "ipam": {
         "type": "calico-ipam"
     },
