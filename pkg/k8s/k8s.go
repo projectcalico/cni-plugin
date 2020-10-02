@@ -170,12 +170,9 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		logger.WithField("routes", routes).Info("Using custom routes from CNI configuration.")
 	}
 
-	labels := make(map[string]string)
-	annot := make(map[string]string)
-
-	var ports []api.EndpointPort
-	var profiles []string
-	var generateName string
+	// Create an empty pod information. We'll populate it with queried
+	// data below if configured to do so.
+	pi := &podInfo{}
 
 	// Only attempt to fetch the labels and annotations from Kubernetes
 	// if the policy type has been set to "k8s". This allows users to
@@ -188,17 +185,24 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		}
 		logger.WithField("NS Annotations", annotNS).Debug("Fetched K8s namespace annotations")
 
-		labels, annot, ports, profiles, generateName, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
+		pi, err = getK8sPodInfo(client, epIDs.Pod, epIDs.Namespace)
 		if err != nil {
 			return nil, err
 		}
-		logger.WithField("labels", labels).Debug("Fetched K8s labels")
-		logger.WithField("annotations", annot).Debug("Fetched K8s annotations")
-		logger.WithField("ports", ports).Debug("Fetched K8s ports")
-		logger.WithField("profiles", profiles).Debug("Generated profiles")
+
+		logger.WithField("labels", pi.labels).Debug("Fetched K8s labels")
+		logger.WithField("annotations", pi.annotations).Debug("Fetched K8s annotations")
+		logger.WithField("ports", pi.ports).Debug("Fetched K8s ports")
+		logger.WithField("profiles", pi.profiles).Debug("Generated profiles")
 
 		// Check for calico IPAM specific annotations and set them if needed.
 		if conf.IPAM.Type == "calico-ipam" {
+			if !conf.IPAM.DisableFinalizers {
+				// Add an argument for the pod's UID so the IPAM plugin can use it.
+				if err := addArg(logger, "CALICO_POD_UID", pi.uid); err != nil {
+					return nil, err
+				}
+			}
 
 			var v4pools, v6pools string
 
@@ -207,11 +211,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 			v6pools = annotNS["cni.projectcalico.org/ipv6pools"]
 
 			// Gets the POD annotation for IP Pools and overwrites Namespace annotation if it exists
-			v4poolpod := annot["cni.projectcalico.org/ipv4pools"]
+			v4poolpod := pi.annotations["cni.projectcalico.org/ipv4pools"]
 			if len(v4poolpod) != 0 {
 				v4pools = v4poolpod
 			}
-			v6poolpod := annot["cni.projectcalico.org/ipv6pools"]
+			v6poolpod := pi.annotations["cni.projectcalico.org/ipv6pools"]
 			if len(v6poolpod) != 0 {
 				v6pools = v6poolpod
 			}
@@ -261,8 +265,8 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		}
 	}
 
-	ipAddrsNoIpam := annot["cni.projectcalico.org/ipAddrsNoIpam"]
-	ipAddrs := annot["cni.projectcalico.org/ipAddrs"]
+	ipAddrsNoIpam := pi.annotations["cni.projectcalico.org/ipAddrsNoIpam"]
+	ipAddrs := pi.annotations["cni.projectcalico.org/ipAddrs"]
 
 	// Switch based on which annotations are passed or not passed.
 	switch {
@@ -345,20 +349,20 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 	endpoint.Name = epIDs.WEPName
 	endpoint.Namespace = epIDs.Namespace
-	endpoint.Labels = labels
-	endpoint.GenerateName = generateName
+	endpoint.Labels = pi.labels
+	endpoint.GenerateName = pi.generateName
 	endpoint.Spec.Endpoint = epIDs.Endpoint
 	endpoint.Spec.Node = epIDs.Node
 	endpoint.Spec.Orchestrator = epIDs.Orchestrator
 	endpoint.Spec.Pod = epIDs.Pod
-	endpoint.Spec.Ports = ports
+	endpoint.Spec.Ports = pi.ports
 	endpoint.Spec.IPNetworks = []string{}
 
 	// Set the profileID according to whether Kubernetes policy is required.
 	// If it's not, then just use the network name (which is the normal behavior)
 	// otherwise use one based on the Kubernetes pod's profile(s).
 	if conf.Policy.PolicyType == "k8s" {
-		endpoint.Spec.Profiles = profiles
+		endpoint.Spec.Profiles = pi.profiles
 	} else {
 		endpoint.Spec.Profiles = []string{conf.Name}
 	}
@@ -381,7 +385,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	// Whether the endpoint existed or not, the veth needs (re)creating.
 	desiredVethName := k8sconversion.NewConverter().VethNameForWorkload(epIDs.Namespace, epIDs.Pod)
 	hostVethName, contVethMac, err := d.DoNetworking(
-		ctx, calicoClient, args, result, desiredVethName, routes, endpoint, annot)
+		ctx, calicoClient, args, result, desiredVethName, routes, endpoint, pi.annotations)
 	if err != nil {
 		logger.WithError(err).Error("Error setting up networking")
 		releaseIPAM()
@@ -417,7 +421,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 	}
 
 	// List of DNAT ipaddrs to map to this workload endpoint
-	floatingIPs := annot["cni.projectcalico.org/floatingIPs"]
+	floatingIPs := pi.annotations["cni.projectcalico.org/floatingIPs"]
 
 	if floatingIPs != "" {
 		// If floating IPs are defined, but the feature is not enabled, return an error.
@@ -627,6 +631,23 @@ func ipAddrsResult(ipAddrs string, conf types.NetConf, args *skel.CmdArgs, logge
 	}
 
 	return &result, nil
+}
+
+// addArg adds an argument to the CNI_ARGS environment variable.
+func addArg(logger *logrus.Entry, arg, value string) error {
+	// Query the original arguments.
+	originalArgs := os.Getenv("CNI_ARGS")
+	logger.Debugf("Original CNI_ARGS=%s", originalArgs)
+
+	newArgs := originalArgs + fmt.Sprintf(";%s=%s", arg, value)
+	logger.Debugf("New CNI_ARGS=%s", newArgs)
+
+	// Set CNI_ARGS to the new value.
+	err := os.Setenv("CNI_ARGS", newArgs)
+	if err != nil {
+		return fmt.Errorf("error setting CNI_ARGS environment variable: %v", err)
+	}
+	return nil
 }
 
 // callIPAMWithIP sets CNI_ARGS with the IP and calls the IPAM plugin with it
@@ -863,26 +884,37 @@ func getK8sNSInfo(client *kubernetes.Clientset, podNamespace string) (annotation
 	return ns.Annotations, nil
 }
 
-func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (labels map[string]string, annotations map[string]string, ports []api.EndpointPort, profiles []string, generateName string, err error) {
+type podInfo struct {
+	labels       map[string]string
+	annotations  map[string]string
+	ports        []api.EndpointPort
+	profiles     []string
+	generateName string
+	uid          string
+}
+
+func getK8sPodInfo(client *kubernetes.Clientset, podName, podNamespace string) (*podInfo, error) {
 	pod, err := client.CoreV1().Pods(string(podNamespace)).Get(podName, metav1.GetOptions{})
 	logrus.Debugf("pod info %+v", pod)
 	if err != nil {
-		return nil, nil, nil, nil, "", err
+		return nil, err
 	}
 
 	c := k8sconversion.NewConverter()
 	kvps, err := c.PodToWorkloadEndpoints(pod)
 	if err != nil {
-		return nil, nil, nil, nil, "", err
+		return nil, err
 	}
 
 	kvp := kvps[0]
-	ports = kvp.Value.(*api.WorkloadEndpoint).Spec.Ports
-	labels = kvp.Value.(*api.WorkloadEndpoint).Labels
-	profiles = kvp.Value.(*api.WorkloadEndpoint).Spec.Profiles
-	generateName = kvp.Value.(*api.WorkloadEndpoint).GenerateName
+	pi := podInfo{}
+	pi.ports = kvp.Value.(*api.WorkloadEndpoint).Spec.Ports
+	pi.labels = kvp.Value.(*api.WorkloadEndpoint).Labels
+	pi.profiles = kvp.Value.(*api.WorkloadEndpoint).Spec.Profiles
+	pi.generateName = kvp.Value.(*api.WorkloadEndpoint).GenerateName
+	pi.uid = fmt.Sprintf("%s", pod.GetUID())
 
-	return labels, pod.Annotations, ports, profiles, generateName, nil
+	return &pi, nil
 }
 
 func getPodCidr(client *kubernetes.Clientset, conf types.NetConf, nodename string) (string, error) {

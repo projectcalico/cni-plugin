@@ -109,7 +109,8 @@ func Main(version string) {
 
 type ipamArgs struct {
 	cnitypes.CommonArgs
-	IP net.IP `json:"ip,omitempty"`
+	IP             net.IP                        `json:"ip,omitempty"`
+	CALICO_POD_UID cnitypes.UnmarshallableString `json:"podUID,omitempty"`
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -147,6 +148,7 @@ func cmdAdd(args *skel.CmdArgs) error {
 
 	ipamArgs := ipamArgs{}
 	if err = cnitypes.LoadArgs(args.Args, &ipamArgs); err != nil {
+		logger.WithError(err).Error("Failed to load CNI IPAM args")
 		return err
 	}
 
@@ -155,6 +157,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 	if epIDs.Pod != "" {
 		attrs[ipam.AttributePod] = epIDs.Pod
 		attrs[ipam.AttributeNamespace] = epIDs.Namespace
+		if ipamArgs.CALICO_POD_UID != "" {
+			attrs["uid"] = fmt.Sprintf("%s", ipamArgs.CALICO_POD_UID)
+		}
 	}
 
 	ctx := context.Background()
