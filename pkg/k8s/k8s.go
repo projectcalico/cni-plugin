@@ -197,9 +197,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 		// Check for calico IPAM specific annotations and set them if needed.
 		if conf.IPAM.Type == "calico-ipam" {
-			// Add an argument for the pod's UID so the IPAM plugin can use it.
-			if err := addArg(logger, "CALICO_POD_UID", pi.uid); err != nil {
-				return nil, err
+			if !conf.IPAM.DisableFinalizers {
+				// Add an argument for the pod's UID so the IPAM plugin can use it.
+				if err := addArg(logger, "CALICO_POD_UID", pi.uid); err != nil {
+					return nil, err
+				}
 			}
 
 			var v4pools, v6pools string
