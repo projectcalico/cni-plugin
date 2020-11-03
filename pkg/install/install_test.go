@@ -234,7 +234,7 @@ PuB/TL+u2y+iQUyXxLy3
 		plug := tempDir + "/bin/portmap"
 		go func() {
 			for {
-				exec.Command(plug).Run()
+				_ = exec.Command(plug).Run()
 				select {
 				case <-done:
 					return
