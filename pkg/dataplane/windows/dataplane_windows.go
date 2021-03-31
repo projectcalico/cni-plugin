@@ -249,7 +249,7 @@ func (d *windowsDataplane) DoNetworking(
 					},
 				},
 			}
-			err = hcsEndpoint.ApplyPolicy(defaultDenyAllACL)
+			err = hcsEndpoint.ApplyPolicy(hcn.RequestTypeUpdate, defaultDenyAllACL)
 		}
 		if err != nil {
 			d.logger.Errorf("Error applying ACL policy DenyAll")
