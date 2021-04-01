@@ -23,7 +23,7 @@ import (
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/sirupsen/logrus"
 
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils/runtime"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/cri"
 
 	"github.com/projectcalico/cni-plugin/pkg/dataplane/windows"
 	"github.com/projectcalico/cni-plugin/pkg/types"
@@ -208,7 +208,7 @@ func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	var err error
 	var result *current.Result
 
-	if !runtime.IsDockershimV1(args.Netns) {
+	if !cri.IsDockershimV1(args.Netns) {
 		return nil, nil
 	}
 
@@ -222,7 +222,7 @@ func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 		// Defensive: this case should be blocked by CNI validation.
 		logger.Info("No network namespace supplied, assuming a lookup-only request.")
 		lookupRequest = true
-	} else if args.Netns != runtime.PauseContainerNetNS {
+	} else if args.Netns != cri.PauseContainerNetNS {
 		// When kubelet really wants to network the pod, it passes us the netns of the "pause" container, which
 		// is a static value. The other requests come from checks on the other containers.
 		// Application containers should be networked with the pause container endpoint to reflect DNS details.

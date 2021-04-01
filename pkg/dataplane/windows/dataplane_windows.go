@@ -32,7 +32,7 @@ import (
 	"github.com/juju/clock"
 	"github.com/juju/errors"
 	"github.com/juju/mutex"
-	"github.com/projectcalico/cni-plugin/internal/pkg/utils/runtime"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils/winpol"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
@@ -215,7 +215,7 @@ func (d *windowsDataplane) DoNetworking(
 	// policy so that if other policies exist then they take precedence.
 	if d.conf.WindowsDisableDefaultDenyAllPolicy == false {
 		var err error
-		if runtime.IsDockershimV1(args.Netns) {
+		if cri.IsDockershimV1(args.Netns) {
 			defaultDenyAllACL := &hcsshim.ACLPolicy{
 				Id:        "CNIDefaultDenyAllPolicy",
 				Type:      hcsshim.ACL,
@@ -256,7 +256,7 @@ func (d *windowsDataplane) DoNetworking(
 			return "", "", err
 		}
 	}
-	if runtime.IsDockershimV1(args.Netns) {
+	if cri.IsDockershimV1(args.Netns) {
 		contVethMAC = hnsEndpointCont.MacAddress
 	} else {
 		contVethMAC = hcsEndpoint.MacAddress
@@ -763,7 +763,7 @@ func (d *windowsDataplane) createAndAttachContainerEP(args *skel.CmdArgs,
 		v2pols = append(v2pols, hcnPol)
 	}
 
-	isDockerV1 := runtime.IsDockershimV1(args.Netns)
+	isDockerV1 := cri.IsDockershimV1(args.Netns)
 	attempts := 3
 	for {
 		var hnsEndpointCont *hcsshim.HNSEndpoint
@@ -1010,7 +1010,7 @@ func (d *windowsDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	epName := hns.ConstructEndpointName(args.ContainerID, args.Netns, n.Name)
 	d.logger.Infof("Attempting to delete HNS endpoint name : %s for container", epName)
 
-	if runtime.IsDockershimV1(args.Netns) {
+	if cri.IsDockershimV1(args.Netns) {
 		err = hns.DeprovisionEndpoint(epName, args.Netns, args.ContainerID)
 		if err != nil && strings.Contains(err.Error(), "not found") {
 			d.logger.WithError(err).Warn("Endpoint not found during delete, assuming it's already been cleaned up")
