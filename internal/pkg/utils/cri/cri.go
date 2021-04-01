@@ -24,9 +24,10 @@ const (
 
 // IsDockershimV1 checks whether the CNI request is from the
 // Dockershim baked into kubelet. In that case, Docker will use either "none" or
-// "container:<container ID>" for the netns arg. We use this to determine
-// whether to use HNS V1 APIs (for Dockershim) or HNS V2 APIs (for containerd
-// and other CRI-compliant runtimes).
+// "container:<container ID>" for the netns arg. If the request is from containerd
+// then netns will be a hex string.
+// We use the netns value to determine whether to use HNS V1 APIs (for Dockershim)
+// or HNS V2 APIs (for containerd and other CRI-compliant runtimes).
 func IsDockershimV1(netns string) bool {
 	return netns == PauseContainerNetNS || strings.HasPrefix(netns, "container:")
 }
