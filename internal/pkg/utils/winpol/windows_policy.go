@@ -83,7 +83,7 @@ func CalculateEndpointPolicies(
 
 		outputV1Pols = append(outputV1Pols, outPol)
 
-		// Get v2 policy.
+		// Convert v2 policy.
 		v2Pol, err := convertToHcnEndpointPolicy(decoded)
 		if err != nil {
 			logger.WithError(err).Error("Failed to convert endpoint policy to HCN endpoint policy.")
@@ -140,11 +140,10 @@ func CalculateEndpointPolicies(
 func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPolicy, error) {
 	hcnPolicy := hcn.EndpointPolicy{}
 
-	policyType := policy["Type"].(string)
 	// Get v2 policy type.
-	v2PolicyType, err := getHcnEndpointPolicyType(policyType)
-	if err != nil {
-		return hcnPolicy, fmt.Errorf("Invalid endpoint policy type")
+	policyType, ok := policy["Type"].(hcn.EndpointPolicyType)
+	if !ok {
+		return hcnPolicy, fmt.Errorf("Invalid HNS V2 endpoint policy type: %v", policy["Type"])
 	}
 
 	// Remove the Type key from the map, leaving just the policy settings
@@ -154,35 +153,9 @@ func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPoli
 	if err != nil {
 		return hcnPolicy, fmt.Errorf("Failed to marshal policy settings.")
 	}
-	hcnPolicy.Type = v2PolicyType
+	hcnPolicy.Type = policyType
 	hcnPolicy.Settings = json.RawMessage(policySettings)
 	return hcnPolicy, nil
-}
-
-func getHcnEndpointPolicyType(v1Type string) (hcn.EndpointPolicyType, error) {
-	switch v1Type {
-	case "OutBoundNAT":
-		return hcn.OutBoundNAT, nil
-	case "ROUTE":
-		return hcn.SDNRoute, nil
-	case "PA":
-		return hcn.NetworkProviderAddress, nil
-	case "ACL":
-		return hcn.ACL, nil
-	case "QOS":
-		return hcn.QOS, nil
-	case "L2Driver":
-		return hcn.L2Driver, nil
-	case "L4Proxy":
-		return hcn.L4Proxy, nil
-	case "PortName":
-		return hcn.PortName, nil
-	case "EncapOverhead":
-		return hcn.EncapOverhead, nil
-	case "InterfaceConstraint":
-		return hcn.NetworkInterfaceConstraint, nil
-	}
-	return "", fmt.Errorf("invalid endpoint policy type: %v", v1Type)
 }
 
 func appendCIDRs(excList []interface{}, extraNATExceptions []*net.IPNet) []interface{} {
