@@ -37,3 +37,5 @@ require (
 	k8s.io/client-go v0.19.6
 	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 )
+
+replace github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico

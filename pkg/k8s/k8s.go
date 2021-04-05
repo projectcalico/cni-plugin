@@ -66,9 +66,11 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 		return nil, err
 	}
 
+	logger.Debugf("Add: containerID: %v, ifName: %v, netns: %v", args.ContainerID, args.IfName, args.Netns)
 	logger.Info("Extracted identifiers for CmdAddK8s")
 
-	result, err = utils.CheckForSpuriousAdd(args, conf, epIDs, endpoint, logger)
+	// If this is the Docker runtime we need to check for extra ADD calls.
+	result, err = utils.CheckForSpuriousDockerAdd(args, conf, epIDs, endpoint, logger)
 	if result != nil || err != nil {
 		return result, err
 	}
@@ -489,6 +491,8 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 	if err != nil {
 		return err
 	}
+
+	logger.Debugf("Del: containerID: %v, ifName: %v, netns: %v", args.ContainerID, args.IfName, args.Netns)
 
 	// Register timestamp before deleting wep. This is important.
 	// Because with ADD command running in parallel checking wep before checking timestamp,
