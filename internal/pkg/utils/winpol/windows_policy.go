@@ -1,3 +1,5 @@
+// +build windows
+
 // Copyright (c) 2018-2021 Tigera, Inc. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -83,13 +85,14 @@ func CalculateEndpointPolicies(
 
 		outputV1Pols = append(outputV1Pols, outPol)
 
-		// Convert v2 policy.
+		// Convert v2 policy. If the conversion to V2 policy fails just log and
+		// continue.
 		v2Pol, err := convertToHcnEndpointPolicy(decoded)
 		if err != nil {
-			logger.WithError(err).Error("Failed to convert endpoint policy to HCN endpoint policy.")
-			return nil, nil, err
+			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", decoded)
+		} else {
+			outputV2Pols = append(outputV2Pols, v2Pol)
 		}
-		outputV2Pols = append(outputV2Pols, v2Pol)
 	}
 	if !found && natOutgoing && len(extraNATExceptions) > 0 {
 		exceptions := appendCIDRs(nil, extraNATExceptions)
@@ -104,13 +107,15 @@ func CalculateEndpointPolicies(
 		}
 
 		outputV1Pols = append(outputV1Pols, json.RawMessage(encoded))
-		// Get v2 policy.
+
+		// Convert v2 policy. If the conversion to V2 policy fails just log and
+		// continue.
 		v2Pol, err := convertToHcnEndpointPolicy(dict)
 		if err != nil {
-			logger.WithError(err).Error("Failed to convert endpoint policy to HCN endpoint policy.")
-			return nil, nil, err
+			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", decoded)
+		} else {
+			outputV2Pols = append(outputV2Pols, v2Pol)
 		}
-		outputV2Pols = append(outputV2Pols, v2Pol)
 	}
 
 	return outputV1Pols, outputV2Pols, nil
