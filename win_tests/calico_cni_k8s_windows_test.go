@@ -199,7 +199,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a K8s pod w/o any special params
-			_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(),&v1.Pod{
+			_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{{
@@ -223,7 +223,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			containerID, result, contVeth, contAddresses, contRoutes, err := testutils.CreateContainer(netconf, name, testutils.HnsNoneNs, "", nsName)
 			Expect(err).ShouldNot(HaveOccurred())
 			defer func() {
-				log.Infof("Container Delete  call")
+				log.Infof("Container Delete call")
 				_, err = testutils.DeleteContainerWithId(netconf, name, testutils.HnsNoneNs, containerID, nsName)
 				Expect(err).ShouldNot(HaveOccurred())
 
@@ -291,7 +291,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			containerEP, err := hcsshim.GetHNSEndpointByName(containerID + "_calico-fv")
 			Expect(containerEP.GatewayAddress).Should(Equal("10.254.112.2"))
 			Expect(containerEP.IPAddress.String()).Should(Equal(ip))
-			Expect(containerEP.VirtualNetwork).Should(Equal(hnsNetwork.Id))
+			Expect(strings.ToUpper(containerEP.VirtualNetwork)).Should(Equal(strings.ToUpper(hnsNetwork.Id)))
 			Expect(containerEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
 		})
 
@@ -300,7 +300,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
 				// Create a K8s pod w/o any special params
-				_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(),&v1.Pod{
+				_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{{
@@ -466,7 +466,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				containerEP, err := hcsshim.GetHNSEndpointByName(containerID + "_calico-fv")
 				Expect(containerEP.GatewayAddress).Should(Equal("10.254.112.2"))
 				Expect(containerEP.IPAddress.String()).Should(Equal(ip))
-				Expect(containerEP.VirtualNetwork).Should(Equal(hnsNetwork.Id))
+				Expect(strings.ToUpper(containerEP.VirtualNetwork)).Should(Equal(strings.ToUpper(hnsNetwork.Id)))
 				Expect(containerEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
 			})
 		})
@@ -546,7 +546,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				containerEP, err := hcsshim.GetHNSEndpointByName(containerID + "_calico-fv")
 				Expect(containerEP.GatewayAddress).Should(Equal("10.254.112.2"))
 				Expect(containerEP.IPAddress.String()).Should(Equal(ip))
-				Expect(containerEP.VirtualNetwork).Should(Equal(hnsNetwork.Id))
+				Expect(strings.ToUpper(containerEP.VirtualNetwork)).Should(Equal(strings.ToUpper(hnsNetwork.Id)))
 				Expect(containerEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
 
 				result2, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, ip, containerID, "", nsName)
@@ -644,7 +644,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				containerEP, err := hcsshim.GetHNSEndpointByName(containerID + "_calico-fv")
 				Expect(containerEP.GatewayAddress).Should(Equal("10.254.112.2"))
 				Expect(containerEP.IPAddress.String()).Should(Equal(ip))
-				Expect(containerEP.VirtualNetwork).Should(Equal(hnsNetwork.Id))
+				Expect(strings.ToUpper(containerEP.VirtualNetwork)).Should(Equal(strings.ToUpper(hnsNetwork.Id)))
 				Expect(containerEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
 
 				// Create network with new subnet
@@ -723,7 +723,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	   					"log_level":"debug"
 	   				}`, cniVersion, networkName, os.Getenv("ETCD_ENDPOINTS"), os.Getenv("DATASTORE_TYPE"), os.Getenv("KUBERNETES_MASTER"))
 
-				testutils.DeleteContainerUsingDocker(containerID)
+				testutils.DeleteRunningContainer(containerID)
 				log.Infof("Network pod again with another subnet and a stopped container")
 				err = testutils.NetworkPod(netconf3, name, ip, ctx, calicoClient, result, containerID, testutils.HnsNoneNs, nsName)
 				Expect(err).Should(HaveOccurred())
@@ -866,7 +866,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				expectedIP := requestedIP
 
 				containerID, result, _, _, _, err := testutils.CreateContainer(netconfHostLocalIPAM, name, testutils.HnsNoneNs, requestedIP, nsName)
-				defer testutils.DeleteContainerUsingDocker(containerID)
+				defer testutils.DeleteRunningContainer(containerID)
 				Expect(err).NotTo(HaveOccurred())
 
 				podIP := result.IPs[0].Address.IP.String()
@@ -1855,7 +1855,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			ipBytes := containerEP.IPAddress.To4()
 			epMacAddr := fmt.Sprintf("%v-%02x-%02x-%02x-%02x", os.Getenv("MAC_PREFIX"), ipBytes[0], ipBytes[1], ipBytes[2], ipBytes[3])
 			Expect(containerEP.MacAddress).Should(Equal(epMacAddr))
-			Expect(containerEP.VirtualNetwork).Should(Equal(hnsNetwork.Id))
+			Expect(strings.ToUpper(containerEP.VirtualNetwork)).Should(Equal(strings.ToUpper(hnsNetwork.Id)))
 			Expect(containerEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
 		})
 	})
