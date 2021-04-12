@@ -112,7 +112,7 @@ func CalculateEndpointPolicies(
 		// continue.
 		v2Pol, err := convertToHcnEndpointPolicy(dict)
 		if err != nil {
-			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", decoded)
+			logger.WithError(err).Warnf("Failed to convert endpoint policy to HCN endpoint policy: %+v", dict)
 		} else {
 			outputV2Pols = append(outputV2Pols, v2Pol)
 		}
