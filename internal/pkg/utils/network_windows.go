@@ -81,7 +81,7 @@ func ensureCalicoKey() error {
 }
 
 // Create key for deletion timestamps if not exists.
-// Remove obsolete  entries.
+// Remove obsolete entries.
 func maintainWepDeletionTimestamps(timeout int) error {
 	if timeout == 0 {
 		timeout = defaultPodDeletionTimestampTimeout
@@ -208,47 +208,48 @@ func CheckForSpuriousDockerAdd(args *skel.CmdArgs,
 	var err error
 	var result *current.Result
 
-	if !cri.IsDockershimV1(args.Netns) {
-		return nil, nil
-	}
+	logger.Debugf("CheckForSpuriousDockerAdd: containerID: %v, ifName: %v, netns: %v", args.ContainerID, args.IfName, args.Netns)
 
 	err = maintainWepDeletionTimestamps(conf.WindowsPodDeletionTimestampTimeout)
 	if err != nil {
 		logger.WithError(err).Warn("Failed to do maintenance on pod deletion timestamps.")
 	}
 
-	lookupRequest := false
-	if args.Netns == "" {
-		// Defensive: this case should be blocked by CNI validation.
-		logger.Info("No network namespace supplied, assuming a lookup-only request.")
-		lookupRequest = true
-	} else if args.Netns != cri.PauseContainerNetNS {
-		// When kubelet really wants to network the pod, it passes us the netns of the "pause" container, which
-		// is a static value. The other requests come from checks on the other containers.
-		// Application containers should be networked with the pause container endpoint to reflect DNS details.
-		logger.Info("Non-pause container specified, doing a lookup-only request.")
-		err = networkApplicationContainer(args)
-		if err != nil {
-			logger.WithError(err).Warn("Failed to network container with pause container endpoint.")
-			return nil, err
+	// For dockershim HNS V1 flow, we need to check for extra CNI ADD calls.
+	if cri.IsDockershimV1(args.Netns) {
+		lookupRequest := false
+		if args.Netns == "" {
+			// Defensive: this case should be blocked by CNI validation.
+			logger.Info("No network namespace supplied, assuming a lookup-only request.")
+			lookupRequest = true
+		} else if args.Netns != cri.PauseContainerNetNS {
+			// When kubelet really wants to network the pod, it passes us the netns of the "pause" container, which
+			// is a static value. The other requests come from checks on the other containers.
+			// Application containers should be networked with the pause container endpoint to reflect DNS details.
+			logger.Info("Non-pause container specified, doing a lookup-only request.")
+			err = networkApplicationContainer(args)
+			if err != nil {
+				logger.WithError(err).Warn("Failed to network container with pause container endpoint.")
+				return nil, err
+			}
+			lookupRequest = true
+		} else if endpoint != nil && len(endpoint.Spec.IPNetworks) > 0 {
+			// Defensive: datastore says the pod is already networked.  This check isn't sufficient on its own because
+			// GetPodNetworkStatus() can race with a CNI DEL operation, making it look like the pod has no network.
+			logger.Info("Endpoint already networked, doing a lookup-only request.")
+			lookupRequest = true
 		}
-		lookupRequest = true
-	} else if endpoint != nil && len(endpoint.Spec.IPNetworks) > 0 {
-		// Defensive: datastore says the pod is already networked.  This check isn't sufficient on its own because
-		// GetPodNetworkStatus() can race with a CNI DEL operation, making it look like the pod has no network.
-		logger.Info("Endpoint already networked, doing a lookup-only request.")
-		lookupRequest = true
-	}
 
-	if lookupRequest {
-		result, err = CreateResultFromEndpoint(endpoint)
-		if err == nil {
-			logger.WithField("result", result).Info("Status lookup result")
-		} else {
-			// For example, endpoint not found (which is expected if we're racing with a CNI DEL).
-			logger.WithError(err).Warn("Failed to look up pod status")
+		if lookupRequest {
+			result, err = CreateResultFromEndpoint(endpoint)
+			if err == nil {
+				logger.WithField("result", result).Info("Status lookup result")
+			} else {
+				// For example, endpoint not found (which is expected if we're racing with a CNI DEL).
+				logger.WithError(err).Warn("Failed to look up pod status")
+			}
+			return result, err
 		}
-		return result, err
 	}
 
 	// After checking wep not exists, next step is to check wep deletion timestamp.
