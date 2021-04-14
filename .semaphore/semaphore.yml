@@ -166,7 +166,7 @@ blocks:
             - ./.semaphore/run-win-fv.sh
 
   - name: 'Push Images (non-PR builds only)'
-    dependencies: ["Unit Tests", "Static Checks", "Windows FV"]
+    dependencies: ["Unit Tests", "Static Checks", "Windows FV - docker", "Windows FV - containerd"]
     skip:
       # Only run on branches, not PRs.
       when: "branch !~ '.+'"
