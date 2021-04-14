@@ -68,7 +68,7 @@ func CmdAddK8s(ctx context.Context, args *skel.CmdArgs, conf types.NetConf, epID
 
 	logger.Info("Extracted identifiers for CmdAddK8s")
 
-	result, err = utils.CheckForSpuriousAdd(args, conf, epIDs, endpoint, logger)
+	result, err = utils.CheckForSpuriousDockerAdd(args, conf, epIDs, endpoint, logger)
 	if result != nil || err != nil {
 		return result, err
 	}
