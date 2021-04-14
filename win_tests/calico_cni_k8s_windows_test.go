@@ -1932,6 +1932,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 		}
 
 		BeforeEach(func() {
+			if os.Getenv("CONTAINER_RUNTIME") == "containerd" {
+				Skip("Pod deletion timestamps only apply to dockershim V1 flow")
+			}
+
 			testutils.WipeK8sPods(vxlanConf)
 
 			nsName = fmt.Sprintf("ns%d", rand.Uint32())
