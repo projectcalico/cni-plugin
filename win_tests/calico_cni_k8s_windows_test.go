@@ -561,6 +561,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 
 		Context("With pod not networked", func() {
 			It("an ADD for NETNS != \"none\" should return error rather than networking the pod", func() {
+				if os.Getenv("CONTAINER_RUNTIME") == "containerd" {
+					Skip("This test only applies to dockershim")
+				}
+
 				log.Infof("Creating container")
 				containerID, result, contVeth, contAddresses, contRoutes, err := testutils.CreateContainer(netconf, name, testutils.K8S_TEST_NS, "", nsName)
 				log.Debugf("containerID :%v , result: %v ,icontVeth : %v , contAddresses : %v ,contRoutes : %v ", containerID, result, contVeth, contAddresses, contRoutes)
@@ -725,9 +729,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	   				}`, cniVersion, networkName, os.Getenv("ETCD_ENDPOINTS"), os.Getenv("DATASTORE_TYPE"), os.Getenv("KUBERNETES_MASTER"))
 
 				testutils.DeleteRunningContainer(containerID)
-				log.Infof("Network pod again with another subnet and a stopped container")
-				err = testutils.NetworkPod(netconf3, name, ip, ctx, calicoClient, result, containerID, testutils.HnsNoneNs, nsName)
-				Expect(err).Should(HaveOccurred())
+
+				// Only applies to dockershim. With containerd, deleting the
+				// container deletes the namespace too.
+				if os.Getenv("CONTAINER_RUNTIME") == "docker" {
+					log.Infof("Network pod again with another subnet and a stopped container")
+					netns = testutils.HnsNoneNs
+					err = testutils.NetworkPod(netconf3, name, ip, ctx, calicoClient, result, containerID, testutils.HnsNoneNs, nsName)
+					Expect(err).Should(HaveOccurred())
+				}
 			})
 
 			It("Network exists but missing management endpoint, should be added", func() {
