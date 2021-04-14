@@ -19,7 +19,3 @@ import realhcn "github.com/Microsoft/hcsshim/hcn"
 
 type EndpointPolicy = realhcn.EndpointPolicy
 type EndpointPolicyType = realhcn.EndpointPolicyType
-
-const (
-	RemoteSubnetRoute = realhcn.RemoteSubnetRoute
-)
