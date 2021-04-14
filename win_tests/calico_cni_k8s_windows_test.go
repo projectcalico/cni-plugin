@@ -87,6 +87,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	var calicoClient client.Interface
 	var err error
 	BeforeSuite(func() {
+		log.Infof("CONTAINER_RUNTIME=%v", os.Getenv("CONTAINER_RUNTIME"))
+
 		//Clean-up Networks if left over in previous run
 		hnsNetworkList, _ := hcsshim.HNSListNetworkRequest("GET", "", "")
 		log.WithField("hnsNetworkList: ", hnsNetworkList).Infof("List of Network")
