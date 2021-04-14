@@ -11,14 +11,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 
-package winpol
+package main_windows_test
 
 import (
 	"encoding/json"
 	"net"
-	"testing"
 
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/winpol"
 	"github.com/sirupsen/logrus"
 )
 
@@ -34,51 +35,61 @@ func init() {
 	mgmtIPNet.IP = mgmtIP // We want the full IP, not the masked version.
 }
 
-func TestCalculateEndpointPolicies(t *testing.T) {
-	RegisterTestingT(t)
-
-	marshaller := newMockPolMarshaller(
-		`{"Type": "OutBoundNAT", "ExceptionList": ["10.96.0.0/12"]}`,
-		`{"Type": "SomethingElse"}`,
-	)
+var _ = Describe("CalculateEndpointPolicies", func() {
 	logger := logrus.WithField("test", "true")
 
 	_, net1, _ := net.ParseCIDR("10.0.1.0/24")
 	_, net2, _ := net.ParseCIDR("10.0.2.0/24")
 
-	t.Log("With NAT disabled, OutBoundNAT should be filtered out")
-	pols, err := CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"Type": "SomethingElse"}`),
-	}), "OutBoundNAT should have been filtered out")
+	It("With NAT disabled, OutBoundNAT should be filtered out", func() {
+		marshaller := newMockPolMarshaller(
+			`{"Type": "OutBoundNAT", "ExceptionList": ["10.96.0.0/12"]}`,
+			`{"Type": "SomethingElse"}`,
+		)
+		pols, _, err := winpol.CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pols).To(Equal([]json.RawMessage{
+			json.RawMessage(`{"Type": "SomethingElse"}`),
+		}), "OutBoundNAT should have been filtered out")
 
-	t.Log("With NAT enabled, OutBoundNAT should be augmented")
-	pols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
-		json.RawMessage(`{"Type": "SomethingElse"}`),
-	}))
+	})
 
-	t.Log("With NAT enabled, and no OutBoundNAT stanza, OutBoundNAT should be added")
-	marshaller = newMockPolMarshaller(
-		`{"Type": "SomethingElse"}`,
-	)
-	pols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"Type": "SomethingElse"}`),
-		json.RawMessage(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
-	}))
+	It("With NAT enabled, OutBoundNAT should be augmented", func() {
+		marshaller := newMockPolMarshaller(
+			`{"Type": "OutBoundNAT", "ExceptionList": ["10.96.0.0/12"]}`,
+			`{"Type": "SomethingElse"}`,
+		)
+		pols, _, err := winpol.CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pols).To(Equal([]json.RawMessage{
+			json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
+			json.RawMessage(`{"Type": "SomethingElse"}`),
+		}))
+	})
 
-	t.Log("With NAT disabled, and no OutBoundNAT stanza, OutBoundNAT should not be added")
-	pols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(pols).To(Equal([]json.RawMessage{
-		json.RawMessage(`{"Type": "SomethingElse"}`),
-	}))
-}
+	It("With NAT enabled, and no OutBoundNAT stanza, OutBoundNAT should be added", func() {
+		marshaller := newMockPolMarshaller(
+			`{"Type": "SomethingElse"}`,
+		)
+		pols, _, err := winpol.CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pols).To(Equal([]json.RawMessage{
+			json.RawMessage(`{"Type": "SomethingElse"}`),
+			json.RawMessage(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
+		}))
+	})
+
+	It("With NAT disabled, and no OutBoundNAT stanza, OutBoundNAT should not be added", func() {
+		marshaller := newMockPolMarshaller(
+			`{"Type": "SomethingElse"}`,
+		)
+		pols, _, err := winpol.CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pols).To(Equal([]json.RawMessage{
+			json.RawMessage(`{"Type": "SomethingElse"}`),
+		}))
+	})
+})
 
 func newMockPolMarshaller(pols ...string) mockPolMarshaller {
 	return mockPolMarshaller(pols)
