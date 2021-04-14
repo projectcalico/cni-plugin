@@ -157,7 +157,7 @@ blocks:
         - name: K8S_VERSION
           value: 1.17.2
         - name: CONTAINER_RUNTIME
-          value: containrd
+          value: containerd
         - name: CONTAINERD_VERSION
           value: 1.4.4
       jobs:
