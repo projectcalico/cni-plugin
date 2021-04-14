@@ -724,7 +724,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	   					"log_level":"debug"
 	   				}`, cniVersion, networkName, os.Getenv("ETCD_ENDPOINTS"), os.Getenv("DATASTORE_TYPE"), os.Getenv("KUBERNETES_MASTER"))
 
-				testutils.DeleteContainerUsingDocker(containerID)
+				testutils.DeleteRunningContainer(containerID)
 				log.Infof("Network pod again with another subnet and a stopped container")
 				err = testutils.NetworkPod(netconf3, name, ip, ctx, calicoClient, result, containerID, testutils.HnsNoneNs, nsName)
 				Expect(err).Should(HaveOccurred())
@@ -867,7 +867,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				expectedIP := requestedIP
 
 				containerID, result, _, _, _, err := testutils.CreateContainer(netconfHostLocalIPAM, name, testutils.HnsNoneNs, requestedIP, nsName)
-				defer testutils.DeleteContainerUsingDocker(containerID)
+				defer testutils.DeleteRunningContainer(containerID)
 				Expect(err).NotTo(HaveOccurred())
 
 				podIP := result.IPs[0].Address.IP.String()
