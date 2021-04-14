@@ -118,6 +118,7 @@ func getContainerNamespace(containerId string) (string, error) {
 	command := fmt.Sprintf("Get-HnsNamespace | Where Containers -eq %v | Select-Object -expandproperty ID", containerId)
 	cmd := exec.Command("powershell.exe", command)
 
+	log.Infof("Running powershell command: %v", command)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		log.WithError(err).Info("could not get namespace for container")
@@ -132,10 +133,21 @@ func createContainerUsingContainerd(containerId string) (string, string, error) 
 	// When 'ctr run' is invoked, a running container is started with no
 	// networking.
 	image := "k8s.gcr.io/pause:3.5"
-	command := fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' run --detach %v %v`, image, containerId)
+
+	command := fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' images pull %v`, image)
 	cmd := exec.Command("powershell.exe", command)
 
+	log.Infof("Running powershell command: %v", command)
 	_, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatal(err)
+		return "", "", err
+	}
+	command = fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' run --detach %v %v`, image, containerId)
+	cmd = exec.Command("powershell.exe", command)
+
+	log.Infof("Running powershell command: %v", command)
+	_, err = cmd.CombinedOutput()
 	if err != nil {
 		log.Fatal(err)
 		return "", "", err
