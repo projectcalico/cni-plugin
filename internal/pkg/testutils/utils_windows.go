@@ -16,6 +16,7 @@ package testutils
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net"
@@ -91,7 +92,7 @@ func CreateContainerUsingDocker() (string, error) {
 
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(err)
+		log.Warn(err)
 		return "", err
 	}
 
@@ -140,8 +141,7 @@ func createContainerUsingContainerd(containerId string) (string, string, error) 
 	log.Infof("Running powershell command: %v", command)
 	_, err := cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(err)
-		return "", "", err
+		return "", "", errors.New(fmt.Sprintf("failed to pull image: %v", err))
 	}
 	command = fmt.Sprintf(`& 'C:\Program Files\containerd\ctr.exe' run --detach %v %v`, image, containerId)
 	cmd = exec.Command("powershell.exe", command)
@@ -149,15 +149,13 @@ func createContainerUsingContainerd(containerId string) (string, string, error) 
 	log.Infof("Running powershell command: %v", command)
 	_, err = cmd.CombinedOutput()
 	if err != nil {
-		log.Fatal(err)
-		return "", "", err
+		return "", "", errors.New(fmt.Sprintf("failed to create container: %v", err))
 	}
 
 	// Next, get the namespace that is associated with the container
 	ns, err := GetContainerNamespace(containerId)
 	if err != nil {
-		log.Fatal(err)
-		return "", "", err
+		return "", "", errors.New(fmt.Sprintf("failed to get container namespace: %v", err))
 	}
 
 	log.Infof("ctr namespace: %s", ns)
@@ -184,9 +182,10 @@ func DeleteRunningContainer(containerId string) error {
 
 	for _, c := range cmds {
 		cmd := exec.Command("powershell.exe", c)
+		log.Infof("Running powershell command: %v", c)
 		_, err := cmd.CombinedOutput()
 		if err != nil {
-			log.Fatal(err)
+			log.WithError(err).WithField("id", containerId).Warn("Failed to stop docker container")
 			return err
 		}
 	}
