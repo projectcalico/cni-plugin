@@ -23,7 +23,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/Microsoft/hcsshim/hcn"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/hcn"
 	"github.com/sirupsen/logrus"
 )
 
