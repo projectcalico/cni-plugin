@@ -113,8 +113,8 @@ func CreateContainerUsingContainerd() (string, string, error) {
 	return createContainerUsingContainerd(containerId)
 }
 
-// getContainerNamespace gets the namespace that is associated with the container.
-func getContainerNamespace(containerId string) (string, error) {
+// GetContainerNamespace gets the namespace that is associated with the container.
+func GetContainerNamespace(containerId string) (string, error) {
 	command := fmt.Sprintf("Get-HnsNamespace | Where Containers -eq %v | Select-Object -expandproperty ID", containerId)
 	cmd := exec.Command("powershell.exe", command)
 
@@ -154,7 +154,7 @@ func createContainerUsingContainerd(containerId string) (string, string, error) 
 	}
 
 	// Next, get the namespace that is associated with the container
-	ns, err := getContainerNamespace(containerId)
+	ns, err := GetContainerNamespace(containerId)
 	if err != nil {
 		log.Fatal(err)
 		return "", "", err
@@ -364,7 +364,7 @@ func DeleteContainerWithIdAndIfaceName(netconf, podName, podNamespace, container
 
 	// For containerd: override the podNamespace with the actual namespace for the container.
 	if os.Getenv("CONTAINER_RUNTIME") == "containerd" {
-		podNamespace, err = getContainerNamespace(containerId)
+		podNamespace, err = GetContainerNamespace(containerId)
 		if err != nil {
 			log.Errorf("Error deleting container %s", containerId)
 			return

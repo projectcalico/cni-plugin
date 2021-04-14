@@ -679,7 +679,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 	   				}`, cniVersion, networkName, os.Getenv("ETCD_ENDPOINTS"), os.Getenv("DATASTORE_TYPE"), os.Getenv("KUBERNETES_MASTER"))
 
 				log.Infof("Network pod again with another subnet")
-				err = testutils.NetworkPod(netconf2, name, ip, ctx, calicoClient, result, containerID, testutils.HnsNoneNs, nsName)
+				// For dockershim, use "none" for NETNS. For containerd we need
+				// to use the container's namespace.
+				netns := testutils.HnsNoneNs
+				if os.Getenv("CONTAINER_RUNTIME") == "containerd" {
+					netns, err = testutils.GetContainerNamespace(containerID)
+					Expect(err).ShouldNot(HaveOccurred())
+				}
+				log.Infof("debug netns: %v", netns)
+				err = testutils.NetworkPod(netconf2, name, ip, ctx, calicoClient, result, containerID, netns, nsName)
 				Expect(err).ShouldNot(HaveOccurred())
 				ip = result.IPs[0].Address.IP.String()
 
@@ -820,7 +828,15 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				_, err = hnsEndpoint.Delete()
 				Expect(err).ShouldNot(HaveOccurred())
 
-				err = testutils.NetworkPod(netconf, name, ip, ctx, calicoClient, result, containerID, testutils.HnsNoneNs, nsName)
+				// For dockershim, use "none" for NETNS. For containerd we need
+				// to use the container's namespace.
+				netns := testutils.HnsNoneNs
+				if os.Getenv("CONTAINER_RUNTIME") == "containerd" {
+					netns, err = testutils.GetContainerNamespace(containerID)
+					Expect(err).ShouldNot(HaveOccurred())
+				}
+				log.Infof("debug netns: %v", netns)
+				err = testutils.NetworkPod(netconf, name, ip, ctx, calicoClient, result, containerID, netns, nsName)
 				Expect(err).ShouldNot(HaveOccurred())
 
 				hostEP, err = hcsshim.GetHNSEndpointByName("calico-fv_ep")
