@@ -199,7 +199,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// Create a K8s pod w/o any special params
-			_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(),&v1.Pod{
+			_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 				ObjectMeta: metav1.ObjectMeta{Name: name},
 				Spec: v1.PodSpec{
 					Containers: []v1.Container{{
@@ -300,7 +300,7 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				name := fmt.Sprintf("run%d", rand.Uint32())
 
 				// Create a K8s pod w/o any special params
-				_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(),&v1.Pod{
+				_, err = clientset.CoreV1().Pods(nsName).Create(context.Background(), &v1.Pod{
 					ObjectMeta: metav1.ObjectMeta{Name: name},
 					Spec: v1.PodSpec{
 						Containers: []v1.Container{{
@@ -549,7 +549,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 				Expect(containerEP.VirtualNetwork).Should(Equal(hnsNetwork.Id))
 				Expect(containerEP.VirtualNetworkName).Should(Equal(hnsNetwork.Name))
 
-				result2, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, testutils.K8S_TEST_NS, ip, containerID, "", nsName)
+				netns := fmt.Sprintf("container:%v", containerID)
+				result2, _, _, _, err := testutils.RunCNIPluginWithId(netconf, name, netns, ip, containerID, "", nsName)
 				Expect(err).ShouldNot(HaveOccurred())
 				Expect(len(result2.IPs)).Should(Equal(1))
 				ip2 := result2.IPs[0].Address.IP.String()
