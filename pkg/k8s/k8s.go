@@ -28,6 +28,7 @@ import (
 	cnitypes "github.com/containernetworking/cni/pkg/types"
 	"github.com/containernetworking/cni/pkg/types/current"
 	"github.com/containernetworking/plugins/pkg/ipam"
+
 	"github.com/sirupsen/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -41,6 +42,7 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/options"
 
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/cri"
 	"github.com/projectcalico/cni-plugin/pkg/dataplane"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 )
@@ -490,13 +492,16 @@ func CmdDelK8s(ctx context.Context, c calicoclient.Interface, epIDs utils.WEPIde
 		return err
 	}
 
-	// Register timestamp before deleting wep. This is important.
-	// Because with ADD command running in parallel checking wep before checking timestamp,
-	// DEL command should run the process in reverse order to avoid race condition.
-	err = utils.RegisterDeletedWep(args.ContainerID)
-	if err != nil {
-		logger.WithError(err).Warn("Failed to register pod deletion timestamp.")
-		return err
+	// We only use pod timestamps for dockershim.
+	if cri.IsDockershimV1(args.Netns) {
+		// Register timestamp before deleting wep. This is important.
+		// Because with ADD command running in parallel checking wep before checking timestamp,
+		// DEL command should run the process in reverse order to avoid race condition.
+		err = utils.RegisterDeletedWep(args.ContainerID)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to register pod deletion timestamp.")
+			return err
+		}
 	}
 
 	for attempts := 5; attempts >= 0; attempts-- {
