@@ -68,6 +68,16 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 		json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
 		json.RawMessage(`{"Type": "SomethingElse"}`),
 	}))
+	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
+		hcn.EndpointPolicy{
+			Type:     "OutBoundNAT",
+			Settings: json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
+		},
+		hcn.EndpointPolicy{
+			Type:     "SomethingElse",
+			Settings: json.RawMessage(`{}`),
+		},
+	}))
 
 	t.Log("With NAT enabled, and no OutBoundNAT stanza, OutBoundNAT should be added")
 	marshaller = newMockPolMarshaller(
