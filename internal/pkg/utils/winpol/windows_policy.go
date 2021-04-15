@@ -144,7 +144,7 @@ func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPoli
 	hcnPolicy := hcn.EndpointPolicy{}
 
 	// Get v2 policy type.
-	policyType, ok := policy["Type"].(hcn.EndpointPolicyType)
+	policyType, ok := policy["Type"].(string)
 	if !ok {
 		return hcnPolicy, fmt.Errorf("Invalid HNS V2 endpoint policy type: %v", policy["Type"])
 	}
@@ -156,7 +156,7 @@ func convertToHcnEndpointPolicy(policy map[string]interface{}) (hcn.EndpointPoli
 	if err != nil {
 		return hcnPolicy, fmt.Errorf("Failed to marshal policy settings.")
 	}
-	hcnPolicy.Type = policyType
+	hcnPolicy.Type = hcn.EndpointPolicyType(policyType)
 	hcnPolicy.Settings = json.RawMessage(policySettings)
 	return hcnPolicy, nil
 }
