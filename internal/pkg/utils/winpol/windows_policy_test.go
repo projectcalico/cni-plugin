@@ -18,6 +18,8 @@ import (
 	"net"
 	"testing"
 
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils/hcn"
+
 	. "github.com/onsi/gomega"
 	"github.com/sirupsen/logrus"
 )
@@ -47,14 +49,20 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	_, net2, _ := net.ParseCIDR("10.0.2.0/24")
 
 	t.Log("With NAT disabled, OutBoundNAT should be filtered out")
-	pols, _, err := CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
+	pols, hcnPols, err := CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"Type": "SomethingElse"}`),
 	}), "OutBoundNAT should have been filtered out")
+	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
+		hcn.EndpointPolicy{
+			Type:     "SomethingElse",
+			Settings: json.RawMessage(`{}`),
+		},
+	}), "OutBoundNAT should have been filtered out")
 
 	t.Log("With NAT enabled, OutBoundNAT should be augmented")
-	pols, _, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
+	pols, hcnPols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"ExceptionList":["10.96.0.0/12","10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
@@ -65,19 +73,35 @@ func TestCalculateEndpointPolicies(t *testing.T) {
 	marshaller = newMockPolMarshaller(
 		`{"Type": "SomethingElse"}`,
 	)
-	pols, _, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
+	pols, hcnPols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, true, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"Type": "SomethingElse"}`),
 		json.RawMessage(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"],"Type":"OutBoundNAT"}`),
 	}))
+	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
+		hcn.EndpointPolicy{
+			Type:     "SomethingElse",
+			Settings: json.RawMessage(`{}`),
+		},
+		hcn.EndpointPolicy{
+			Type:     "OutBoundNAT",
+			Settings: json.RawMessage(`{"ExceptionList":["10.0.1.0/24","10.0.2.0/24","10.11.128.0/19"]}`),
+		},
+	}))
 
 	t.Log("With NAT disabled, and no OutBoundNAT stanza, OutBoundNAT should not be added")
-	pols, _, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
+	pols, hcnPols, err = CalculateEndpointPolicies(marshaller, []*net.IPNet{net1, net2, mgmtIPNet}, false, mgmtIP, logger)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(pols).To(Equal([]json.RawMessage{
 		json.RawMessage(`{"Type": "SomethingElse"}`),
 	}))
+	Expect(hcnPols).To(Equal([]hcn.EndpointPolicy{
+		hcn.EndpointPolicy{
+			Type:     "SomethingElse",
+			Settings: json.RawMessage(`{}`),
+		},
+	}), "OutBoundNAT should have been filtered out")
 }
 
 func newMockPolMarshaller(pols ...string) mockPolMarshaller {
