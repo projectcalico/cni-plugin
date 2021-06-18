@@ -1,4 +1,4 @@
-// Copyright (c) 2015-2020 Tigera, Inc. All rights reserved.
+// Copyright (c) 2015-2021 Tigera, Inc. All rights reserved.
 
 package main_test
 
@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/types"
@@ -42,7 +43,6 @@ import (
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/names"
 	cnet "github.com/projectcalico/libcalico-go/lib/net"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 )
 

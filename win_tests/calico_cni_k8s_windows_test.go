@@ -28,6 +28,7 @@ import (
 
 	"github.com/Microsoft/hcsshim"
 	"github.com/containernetworking/cni/pkg/types/current"
+	"github.com/projectcalico/api/pkg/lib/numorstring"
 	"github.com/projectcalico/cni-plugin/internal/pkg/testutils"
 	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/k8s"
@@ -37,7 +38,6 @@ import (
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
 	"github.com/projectcalico/libcalico-go/lib/names"
-	"github.com/projectcalico/libcalico-go/lib/numorstring"
 	"github.com/projectcalico/libcalico-go/lib/options"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
