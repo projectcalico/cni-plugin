@@ -169,6 +169,11 @@ func Install() error {
 		}
 	}
 
+	// Set the suid bit on the binaries to allow them to run as non-root users.
+	if err := setSuidBit("/opt/cni/bin/install"); err != nil {
+		logrus.WithError(err).Fatalf("Failed to set the suid bit on installed binaries")
+	}
+
 	// Copy install to calico and calico-ipam
 	if err := copyFileAndPermissions("/opt/cni/bin/install", "/opt/cni/bin/calico"); err != nil {
 		logrus.WithError(err).Fatalf("Failed to copy install to calico")
@@ -471,4 +476,17 @@ current-context: calico-context`
 	if err := ioutil.WriteFile("/host/etc/cni/net.d/calico-kubeconfig", []byte(data), 0600); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func setSuidBit(file string) error {
+	fi, err := os.Stat(file)
+	if err != nil {
+		return fmt.Errorf("failed to stat file: %s", err)
+	}
+	err = os.Chmod(file, fi.Mode()|os.FileMode(uint32(8388608)))
+	if err != nil {
+		return fmt.Errorf("failed to chmod file: %s", err)
+	}
+
+	return nil
 }

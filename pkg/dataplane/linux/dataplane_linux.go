@@ -30,6 +30,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/vishvananda/netlink"
 
+	"github.com/projectcalico/cni-plugin/internal/pkg/utils"
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	api "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	calicoclient "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -498,4 +499,143 @@ func (d *linuxDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	}
 
 	return nil
+}
+
+func (d *linuxDataplane) CheckNetworking(args *skel.CmdArgs, prevResult *current.Result) error {
+	caliVethName := "cali" + args.ContainerID[:utils.Min(11, len(args.ContainerID))]
+	err := d.configureInterface(caliVethName, prevResult)
+	if err != nil {
+		d.logger.WithError(err).Warnf("Failed to configure interface %s", caliVethName)
+	}
+
+	exists, err := interfaceExistsInProcSys(caliVethName)
+	if err != nil {
+		d.logger.WithError(err).Warnf("Failed to check if %s interface exists", caliVethName)
+	}
+
+	if !exists {
+		return fmt.Errorf("Interface %s should exist but does not", caliVethName)
+	}
+
+	// TODO: Need to check the state of the interface specified in the prevResult of the args as per spec
+	return nil
+}
+
+func (d *linuxDataplane) configureInterface(name string, prevResult *current.Result) error {
+	// TODO: Do we need something to check for active interfaces? Something similar to the below?
+	/*
+		if !m.activeUpIfaces.Contains(name) {
+			log.WithField("ifaceName", name).Info(
+				"Skipping configuration of interface because it is oper down.")
+			return nil
+		}
+	*/
+
+	// Special case: for security, even if our IPv6 support is disabled, try to disable RAs on the interface.
+	acceptRAPath := fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/accept_ra", name)
+	err = writeProcSys(acceptRAPath, "0")
+	if err != nil {
+		if exists, err := m.interfaceExistsInProcSys(name); err == nil && !exists {
+			d.logger.WithField("file", acceptRAPath).Debug(
+				"Failed to set accept_ra flag. Interface is missing in /proc/sys.")
+		} else {
+			d.logger.WithField("ifaceName", name).Warnf("Could not set accept_ra: %v", err)
+		}
+	}
+
+	// Find out the IP version of the interface.
+	var ipVersion string
+	for i, iface := range prevResult.Interfaces {
+		if iface.Name == name {
+			// Find the IP address that matches the interface index
+			for _, ip := range prevResult.IPs {
+				if ip.Interface != nil && *ip.Interface == i {
+					ipVersion = ip.Version
+					break
+				}
+			}
+		}
+	}
+
+	// Empty ipVersion means that the cali interface was not found in the previous result of interfaces
+	if ipVersion == "" {
+		return fmt.Errorf("Unable to determine IP version for interface: %s from previous result", name)
+	}
+
+	d.logger.WithField("ifaceName", name).Info(
+		"Applying /proc/sys configuration to interface.")
+
+	if ipVersion == "4" {
+		// Enable routing to localhost.  This is required to allow for NAT to the local
+		// host.
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/route_localnet", name), "1")
+		if err != nil {
+			return err
+		}
+		// Normally, the kernel has a delay before responding to proxy ARP but we know
+		// that's not needed in a Calico network so we disable it.
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/neigh/%s/proxy_delay", name), "0")
+		if err != nil {
+			return err
+		}
+		// Enable proxy ARP, this makes the host respond to all ARP requests with its own
+		// MAC.  This has a couple of advantages:
+		//
+		// - In OpenStack, we're forced to configure the guest's networking using DHCP.
+		//   Since DHCP requires a subnet and gateway, representing the Calico network
+		//   in the natural way would lose a lot of IP addresses.  For IPv4, we'd have to
+		//   advertise a distinct /30 to each guest, which would use up 4 IPs per guest.
+		//   Using proxy ARP, we can advertise the whole pool to each guest as its subnet
+		//   but have the host respond to all ARP requests and route all the traffic whether
+		//   it is on or off subnet.
+		//
+		// - For containers, we install explicit routes into the containers network
+		//   namespace and we use a link-local address for the gateway.  Turing on proxy ARP
+		//   means that we don't need to assign the link local address explicitly to each
+		//   host side of the veth, which is one fewer thing to maintain and one fewer
+		//   thing we may clash over.
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/proxy_arp", name), "1")
+		if err != nil {
+			return err
+		}
+		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
+		// be forwarded in both directions we need this flag to be set on the fabric-facing
+		// interface too (or for the global default to be set).
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv4/conf/%s/forwarding", name), "1")
+		if err != nil {
+			return err
+		}
+	} else {
+		// Enable proxy NDP, similarly to proxy ARP, described above.
+		err := writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/proxy_ndp", name), "1")
+		if err != nil {
+			return err
+		}
+		// Enable IP forwarding of packets coming _from_ this interface.  For packets to
+		// be forwarded in both directions we need this flag to be set on the fabric-facing
+		// interface too (or for the global default to be set).
+		err = writeProcSys(fmt.Sprintf("/proc/sys/net/ipv6/conf/%s/forwarding", name), "1")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func interfaceExistsInProcSys(name string) (bool, error) {
+	// Check if interface exists in both ipv4 and ipv6 directories
+	directories := []string{fmt.Sprintf("/proc/sys/net/ipv4/conf/%s", name), fmt.Sprintf("/proc/sys/net/ipv6/conf/%s", name)}
+	for _, directory := range directories {
+		_, err := os.Stat(directory)
+		if err == nil {
+			return true, nil
+		}
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+	}
+	return false, nil
 }
