@@ -43,6 +43,8 @@ type Dataplane interface {
 	) (hostVethName, contVethMAC string, err error)
 
 	CleanUpNamespace(args *skel.CmdArgs) error
+
+	CheckNetworking(args *skel.CmdArgs, prevResult *current.Result) error
 }
 
 func GetDataplane(conf types.NetConf, logger *logrus.Entry) (Dataplane, error) {
