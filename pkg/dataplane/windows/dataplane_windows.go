@@ -1140,3 +1140,8 @@ func GetDRMACAddr(networkName string, subNet *net.IPNet) (net.HardwareAddr, erro
 	logrus.Infof("mac address = %v", mac)
 	return mac, nil
 }
+
+func (d *windowsDataplane) CheckNetworking(args *skel.CmdArgs, prevResult *current.Result) error {
+	// Not needed for the windows dataplane.
+	return nil
+}
