@@ -39,3 +39,5 @@ require (
 )
 
 replace github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
+
+replace github.com/projectcalico/libcalico-go => github.com/fasaxc/libcalico-go v0.0.0-20210727141154-f2b825ae4990
