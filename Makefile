@@ -61,6 +61,7 @@ CNI_VERSION=v1.0.0
 CNI_SPEC_VERSION?=0.3.1
 
 DEPLOY_CONTAINER_MARKER=cni_deploy_container-$(ARCH).created
+DEPLOY_CONTAINER_MARKER_WINDOWS=cni_deploy_container-windows.created
 
 
 ETCD_CONTAINER ?= quay.io/coreos/etcd:$(ETCD_VERSION)-$(BUILDARCH)
@@ -71,7 +72,7 @@ endif
 
 .PHONY: clean
 clean:
-	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) .go-pkg-cache pkg/install/install.test 
+	rm -rf $(BIN) bin $(DEPLOY_CONTAINER_MARKER) $(DEPLOY_CONTAINER_MARKER_WINDOWS) .go-pkg-cache pkg/install/install.test 
 	rm -f *.created
 	rm -f crds.yaml
 	rm -rf config/
@@ -79,6 +80,10 @@ clean:
 	# empty
 	rm -rf vendor/
 	rm Makefile.common*
+	docker buildx rm img-builder 
+
+clean-windows:
+	docker buildx rm img-builder
 
 ###############################################################################
 # Updating pins
@@ -138,12 +143,17 @@ $(BIN_WIN)/install.exe $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(LOCAL
 ###############################################################################
 # Building the image
 ###############################################################################
+BIN=bin/$(ARCH)
 image: $(DEPLOY_CONTAINER_MARKER)
+ifeq ($(ARCH),amd64)
+# Go only supports amd64 for Windows builds.
+image: $(DEPLOY_CONTAINER_MARKER_WINDOWS)
+endif
 image-all: $(addprefix sub-image-,$(VALIDARCHES))
 sub-image-%:
 	$(MAKE) image ARCH=$*
 
-$(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build fetch-cni-bins
+$(DEPLOY_CONTAINER_MARKER): Dockerfile.$(ARCH) build $(BIN)/fetch-cni-bins
 	GO111MODULE=on docker build -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH) --build-arg QEMU_IMAGE=$(CALICO_BUILD) --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile.$(ARCH) .
 ifeq ($(ARCH),amd64)
 	# Need amd64 builds tagged as :latest because Semaphore depends on that
@@ -151,8 +161,13 @@ ifeq ($(ARCH),amd64)
 endif
 	touch $@
 
-.PHONY: fetch-cni-bins
-fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+$(DEPLOY_CONTAINER_MARKER_WINDOWS): Dockerfile-windows build 
+	docker buildx create --name img-builder --use --platform windows/amd64 
+	GO111MODULE=on docker buildx build --platform windows/amd64 --output=type=registry --pull -t $(CNI_PLUGIN_IMAGE):latest-$(ARCH)-windows --build-arg GIT_VERSION=$(GIT_VERSION) -f Dockerfile-windows .
+	docker buildx rm img-builder 
+
+$(BIN)/fetch-cni-bins: $(BIN)/flannel $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth
+$(WIN_BIN)/fetch-cni-bins: $(WIN_BIN)/flannel
 
 $(BIN)/loopback $(BIN)/host-local $(BIN)/portmap $(BIN)/tuning $(BIN)/bandwidth:
 	mkdir -p $(BIN)
@@ -164,6 +179,13 @@ $(BIN)/flannel:
 	# Eventually, replace with a release from https://github.com/flannel-io/cni-plugin
 	mkdir -p $(BIN)
 	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/v0.9.1/cni-plugins-linux-$(subst v7,,$(ARCH))-v0.9.1.tgz | tar -xz -C $(BIN) ./flannel
+
+# $(WIN_BIN)/flannel:
+# 	# Flannel Windows was removed from v1.0.0 CNI plugins, but doesn't yet have its own release.
+# 	# For now, just pull the older version of the binary hosted at containernetworking/plugins.
+# 	# Eventually, replace with a release from https://github.com/flannel-io/cni-plugin
+# 	mkdir -p $(WIN_BIN)
+# 	$(CURL) -L --retry 5 https://github.com/containernetworking/plugins/releases/download/v0.9.1/cni-plugins-windows-$(subst v7,,$(ARCH))-v0.9.1.tgz | tar -xz -C $(WIN_BIN) ./flannel
 
 ###############################################################################
 # Unit Tests
