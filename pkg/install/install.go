@@ -429,7 +429,7 @@ kind: Config
 clusters:
 - name: local
   cluster:
-    server: __KUBERNETES_SERVICE_PROTOCOL__://[__KUBERNETES_SERVICE_HOST__]:__KUBERNETES_SERVICE_PORT__
+    server: __KUBERNETES_SERVICE_PROTOCOL__://__KUBERNETES_SERVICE_HOST__:__KUBERNETES_SERVICE_PORT__
     __TLS_CFG__
 users:
 - name: calico
