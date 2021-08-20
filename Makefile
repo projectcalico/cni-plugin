@@ -93,7 +93,7 @@ build: $(BIN)/install $(BIN)/calico $(BIN)/calico-ipam
 ifeq ($(ARCH),amd64)
 # Go only supports amd64 for Windows builds.
 BIN_WIN=bin/windows
-build: $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe
+build: $(BIN_WIN)/install.exe $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe
 endif
 # If ARCH is arm based, find the requested version/variant
 ifeq ($(word 1,$(subst v, ,$(ARCH))),arm)
@@ -126,12 +126,13 @@ $(BIN)/install binary: $(SRC_FILES)
 		go build -v -o $(BIN)/install -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
 
 ## Build the Calico network plugin and ipam plugins for Windows
-$(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(LOCAL_BUILD_DEP) $(SRC_FILES)
+$(BIN_WIN)/install.exe $(BIN_WIN)/calico.exe $(BIN_WIN)/calico-ipam.exe: $(LOCAL_BUILD_DEP) $(SRC_FILES)
 	$(DOCKER_RUN) \
 	-e GOOS=windows \
 	    $(CALICO_BUILD) sh -c '$(GIT_CONFIG_SSH) \
 		go build -v -o $(BIN_WIN)/calico.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico && \
-		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
+		go build -v -o $(BIN_WIN)/calico-ipam.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico && \
+		go build -v -o $(BIN_WIN)/install.exe -ldflags "-X main.VERSION=$(GIT_VERSION) -s -w" $(PACKAGE_NAME)/cmd/calico'
 
 
 ###############################################################################
