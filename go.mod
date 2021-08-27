@@ -39,3 +39,5 @@ require (
 )
 
 replace github.com/Microsoft/hcsshim => github.com/projectcalico/hcsshim v0.8.9-calico
+
+replace k8s.io/client-go => github.com/jsturtevant/client-go v0.21.0-rc.0.0.20210825203246-58976d9d9375
