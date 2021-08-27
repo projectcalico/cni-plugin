@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"time"
 
@@ -277,28 +278,7 @@ func isValidJSON(s string) error {
 }
 
 func writeCNIConfig(c config) {
-	netconf := `{
-  "name": "k8s-pod-network",
-  "cniVersion": "0.3.1",
-  "plugins": [
-    {
-      "type": "calico",
-      "log_level": "__LOG_LEVEL__",
-      "log_file_path": "__LOG_FILE_PATH__",
-      "datastore_type": "__DATASTORE_TYPE__",
-      "nodename": "__KUBERNETES_NODE_NAME__",
-      "mtu": __CNI_MTU__,
-      "ipam": {"type": "calico-ipam"},
-      "policy": {"type": "k8s"},
-      "kubernetes": {"kubeconfig": "__KUBECONFIG_FILEPATH__"}
-    },
-    {
-      "type": "portmap",
-      "snat": true,
-      "capabilities": {"portMappings": true}
-    }
-  ]
-}`
+	netconf := defaultNetConf()
 
 	// Pick the config template to use. This can either be through an env var,
 	// or a file mounted into the container.
@@ -337,6 +317,15 @@ func writeCNIConfig(c config) {
 	netconf = strings.Replace(netconf, "__KUBERNETES_SERVICE_PORT__", getEnv("KUBERNETES_SERVICE_PORT", ""), -1)
 
 	netconf = strings.Replace(netconf, "__SERVICEACCOUNT_TOKEN__", string(c.ServiceAccountToken), -1)
+
+	// Perform replacement of windows variables
+	if runtime.GOOS == "windows" {
+		netconf = strings.Replace(netconf, "__ROUTE_TYPE__", getEnv("ROUTE_TYPE", "OutBoundNAT"), -1)
+		netconf = strings.Replace(netconf, "__K8S_SERVICE_CIDR__", getEnv("K8S_SERVICE_CIDR", "10.96.0.0/12"), -1)
+		netconf = strings.Replace(netconf, "__VNI__", getEnv("VXLAN_VNI", "4096"), -1)
+		netconf = strings.Replace(netconf, "__MAC_PREFIX__", getEnv("MAC_PREFIX", "0E-2A"), -1)
+		netconf = strings.Replace(netconf, "__VNI__", getEnv("VXLAN_VNI", "4096"), -1)
+	}
 
 	// Replace etcd datastore variables.
 	hostSecretsDir := c.CNINetDir + "/calico-tls"
@@ -407,6 +396,11 @@ func copyFileAndPermissions(src, dst string) (err error) {
 	err = os.Rename(dstTmp, dst)
 	if err != nil {
 		return fmt.Errorf("failed to rename file: %s", err)
+	}
+
+	if runtime.GOOS == "windows" {
+		// chmod doesn't work on windows
+		return
 	}
 
 	// chmod the dst file to match the original permissions.

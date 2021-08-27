@@ -32,5 +32,5 @@ ADD bin/windows/ /opt/cni/bin/
 ENV PATH=$PATH:/opt/cni/bin
 # Workdir is not support at this time
 # https://github.com/docker/buildx/issues/378
-#WORKDIR /opt/cni/bin
-CMD ["/opt/cni/bin/install"]
+# WORKDIR /opt/cni/bin
+CMD ["/opt/cni/bin/install.exe"]
