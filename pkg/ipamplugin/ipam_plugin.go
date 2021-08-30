@@ -32,6 +32,7 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/prometheus/common/log"
 	"github.com/sirupsen/logrus"
+	"github.com/tigera/libcalico-go-private/lib/backend/model"
 
 	"github.com/projectcalico/libcalico-go/lib/apiconfig"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
@@ -423,7 +424,12 @@ func cmdDel(args *skel.CmdArgs) error {
 	unlock := acquireIPAMLockBestEffort(conf.IPAMLockFile)
 	defer unlock()
 
-	if err := calicoClient.IPAM().ReleaseByHandle(ctx, handleID); err != nil {
+	// TODO: We bypass RV / UID checking by building a KVP by hand. We should really be querying the
+	// datastore for this.
+	handle := model.KVPair{
+		Key: model.IPAMHandleKey{HandleID: handleID},
+	}
+	if err := calicoClient.IPAM().ReleaseByHandle(ctx, &handle); err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 			logger.WithError(err).Error("Failed to release address")
 			return err
@@ -440,7 +446,12 @@ func cmdDel(args *skel.CmdArgs) error {
 	}
 
 	logger.Info("Releasing address using workloadID")
-	if err := calicoClient.IPAM().ReleaseByHandle(ctx, workloadID); err != nil {
+
+	// TODO - same as above.
+	handle = model.KVPair{
+		Key: model.IPAMHandleKey{HandleID: workloadID},
+	}
+	if err := calicoClient.IPAM().ReleaseByHandle(ctx, &handle); err != nil {
 		if _, ok := err.(errors.ErrorResourceDoesNotExist); !ok {
 			logger.WithError(err).Error("Failed to release address")
 			return err
