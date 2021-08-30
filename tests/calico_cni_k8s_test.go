@@ -38,6 +38,7 @@ import (
 	"github.com/projectcalico/cni-plugin/pkg/types"
 	libapi "github.com/projectcalico/libcalico-go/lib/apis/v3"
 	k8sconversion "github.com/projectcalico/libcalico-go/lib/backend/k8s/conversion"
+	"github.com/projectcalico/libcalico-go/lib/backend/model"
 	client "github.com/projectcalico/libcalico-go/lib/clientv3"
 	"github.com/projectcalico/libcalico-go/lib/ipam"
 	"github.com/projectcalico/libcalico-go/lib/logutils"
@@ -1164,7 +1165,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			// Release all the IPs assigned above.
-			err = calicoClient.IPAM().ReleaseByHandle(context.Background(), handle)
+			handleKVP := model.KVPair{
+				Key: model.IPAMHandleKey{HandleID: handle},
+			}
+			err = calicoClient.IPAM().ReleaseByHandle(context.Background(), &handleKVP)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 
@@ -1225,7 +1229,10 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			// Release all the IPs assigned above.
-			err = calicoClient.IPAM().ReleaseByHandle(context.Background(), handle)
+			handleKVP := model.KVPair{
+				Key: model.IPAMHandleKey{HandleID: handle},
+			}
+			err = calicoClient.IPAM().ReleaseByHandle(context.Background(), &handleKVP)
 			Expect(err).ShouldNot(HaveOccurred())
 		})
 
