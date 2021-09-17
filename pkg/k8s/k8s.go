@@ -593,7 +593,7 @@ func releaseIPAddrs(ipAddrs []string, calico calicoclient.Interface, logger *log
 			log.WithError(err).Error("Failed to release explicit IP")
 			return err
 		}
-		if len(unallocated) > 0 {
+		if len(unallocated) == 0 {
 			log.Warn("Asked to release address but it doesn't exist.")
 		} else {
 			log.Infof("Released explicit address: %s", ip)
