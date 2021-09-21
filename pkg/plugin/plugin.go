@@ -665,8 +665,13 @@ func cmdCheck(args *skel.CmdArgs) (err error) {
 	}
 
 	// Unmarshal the prevResult stored in the network config from ADD
+	netconf := cnitypes.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &netconf); err != nil {
+		return fmt.Errorf("failed to load CNI netconf: %v", err)
+	}
+
 	var prevResultJson []byte
-	prevResultJson, err = json.Marshal(conf.RawPrevResult)
+	prevResultJson, err = json.Marshal(netconf.RawPrevResult)
 	if err != nil {
 		return fmt.Errorf("failed to marshal prevResult from netconf: %v", err)
 	}
