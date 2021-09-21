@@ -648,6 +648,16 @@ func cmdCheck(args *skel.CmdArgs) (err error) {
 
 	utils.ConfigureLogging(conf)
 
+	// Determine which node name to use.
+	nodename := utils.DetermineNodename(conf)
+
+	var epIDs *utils.WEPIdentifiers
+	epIDs, err = utils.GetIdentifiers(args, nodename)
+	if err != nil {
+		return
+	}
+	logger := logrus.WithFields(logrus.Fields{"ContainerID": epIDs.ContainerID})
+
 	var d dataplane.Dataplane
 	d, err = dataplane.GetDataplane(conf, logger)
 	if err != nil {
@@ -656,7 +666,7 @@ func cmdCheck(args *skel.CmdArgs) (err error) {
 
 	// Unmarshal the prevResult stored in the network config from ADD
 	var prevResultJson []byte
-	prevResultJson, err = json.Marshal(netconf.RawPrevResult)
+	prevResultJson, err = json.Marshal(conf.RawPrevResult)
 	if err != nil {
 		return fmt.Errorf("failed to marshal prevResult from netconf: %v", err)
 	}
@@ -669,6 +679,8 @@ func cmdCheck(args *skel.CmdArgs) (err error) {
 	if err != nil {
 		return
 	}
+
+	return
 }
 
 func Main(version string) {
