@@ -150,3 +150,8 @@ func (d *grpcDataplane) CleanUpNamespace(args *skel.CmdArgs) error {
 	}
 	return nil
 }
+
+func (d *grpcDataplane) CheckNetworking(args *skel.CmdArgs, prevResult *current.Result) error {
+	// Not needed for the GRPC dataplane.
+	return nil
+}

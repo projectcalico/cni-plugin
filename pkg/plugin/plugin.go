@@ -622,6 +622,67 @@ func cmdDel(args *skel.CmdArgs) (err error) {
 	return
 }
 
+func cmdCheck(args *skel.CmdArgs) (err error) {
+	// Defer a panic recover, so that in case we panic we can still return
+	// a proper error to the runtime.
+	defer func() {
+		if e := recover(); e != nil {
+			msg := fmt.Sprintf("Calico CNI panicked during CHECK: %s", e)
+			if err != nil {
+				// If we're recovering and there was also an error, then we need to
+				// present both.
+				msg = fmt.Sprintf("%s: error=%s", msg, err)
+			}
+			err = fmt.Errorf(msg)
+		}
+		if err != nil {
+			logrus.WithError(err).Error("Final result of CNI CHECK was an error.")
+		}
+	}()
+
+	// Unmarshal the network config, and perform validation
+	conf := types.NetConf{}
+	if err := json.Unmarshal(args.StdinData, &conf); err != nil {
+		return fmt.Errorf("failed to load netconf: %v", err)
+	}
+
+	utils.ConfigureLogging(conf)
+
+	// Determine which node name to use.
+	nodename := utils.DetermineNodename(conf)
+
+	var epIDs *utils.WEPIdentifiers
+	epIDs, err = utils.GetIdentifiers(args, nodename)
+	if err != nil {
+		return
+	}
+	logger := logrus.WithFields(logrus.Fields{"ContainerID": epIDs.ContainerID})
+
+	var d dataplane.Dataplane
+	d, err = dataplane.GetDataplane(conf, logger)
+	if err != nil {
+		return
+	}
+
+	// Unmarshal the prevResult stored in the network config from ADD
+	var prevResultJson []byte
+	prevResultJson, err = json.Marshal(conf.RawPrevResult)
+	if err != nil {
+		return fmt.Errorf("failed to marshal prevResult from netconf: %v", err)
+	}
+	prevResult := &current.Result{}
+	if err = json.Unmarshal(prevResultJson, prevResult); err != nil {
+		return fmt.Errorf("failed to load prevResult from netconf: %v", err)
+	}
+
+	err = d.CheckNetworking(args, prevResult)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 func Main(version string) {
 	// Set up logging formatting.
 	logrus.SetFormatter(&logutils.Formatter{})
@@ -682,7 +743,7 @@ func Main(version string) {
 		os.Exit(1)
 	}
 
-	skel.PluginMain(cmdAdd, nil, cmdDel,
+	skel.PluginMain(cmdAdd, cmdCheck, cmdDel,
 		cniSpecVersion.PluginSupports("0.1.0", "0.2.0", "0.3.0", "0.3.1"),
 		"Calico CNI plugin "+version)
 }
