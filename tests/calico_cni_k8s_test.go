@@ -303,8 +303,8 @@ var _ = Describe("Kubernetes CNI tests", func() {
 			Expect(err).ShouldNot(HaveOccurred())
 
 			// Assert sysctl values are set for what we would expect for an endpoint.
-			//err = checkInterfaceConfig(interfaceName, "4")
-			//Expect(err).ShouldNot(HaveOccurred())
+			err = checkInterfaceConfig(interfaceName, "4")
+			Expect(err).ShouldNot(HaveOccurred())
 
 			// Assert if the host side route is programmed correctly.
 			hostRoutes, err := netlink.RouteList(hostVeth, syscall.AF_INET)
