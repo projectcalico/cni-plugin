@@ -7,6 +7,7 @@ require (
 	github.com/buger/jsonparser v1.0.0
 	github.com/containernetworking/cni v0.8.0
 	github.com/containernetworking/plugins v0.8.5
+	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/gofrs/flock v0.8.0
 	github.com/gogo/protobuf v1.3.2
 	github.com/howeyc/fsnotify v0.9.0
@@ -20,8 +21,8 @@ require (
 	github.com/nmrshll/go-cp v0.0.0-20180115193924-61436d3b7cfa
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.1
-	github.com/projectcalico/api v0.0.0-20210908204226-36fbcf68f1c8
-	github.com/projectcalico/libcalico-go v1.7.2-0.20211004215358-d4cf14172787
+	github.com/projectcalico/api v0.0.0-20211005123650-be8650baf048
+	github.com/projectcalico/libcalico-go v1.7.2-0.20211005125516-43b35ddc2f4a
 	github.com/prometheus/common v0.9.1
 	github.com/rakelkar/gonetsh v0.0.0-20190930180311-e5c5ffe4bdf0
 	github.com/satori/go.uuid v1.2.0
