@@ -225,7 +225,7 @@ run-k8s-apiserver: config/crd stop-k8s-apiserver run-etcd
 	  --name calico-k8s-apiserver \
 	  -v `pwd`/config:/config \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
-	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) kube-apiserver \
+	  gcr.io/google_containers/hyperkube-$(ARCH):v1.17.1 kube-apiserver \
 	    --etcd-servers=http://$(LOCAL_IP_ENV):2379 \
 	    --service-cluster-ip-range=10.101.0.0/16 \
 	    --service-account-key-file=/private.key
@@ -238,7 +238,7 @@ run-k8s-controller: stop-k8s-controller run-k8s-apiserver
 	docker run --detach --net=host \
 	  --name calico-k8s-controller \
 	  -v `pwd`/internal/pkg/testutils/private.key:/private.key \
-	  gcr.io/google_containers/hyperkube-$(ARCH):$(K8S_VERSION) kube-controller-manager \
+	  gcr.io/google_containers/hyperkube-$(ARCH):v1.17.1 kube-controller-manager \
 	    --master=127.0.0.1:8080 \
 	    --min-resync-period=3m \
 	    --allocate-node-cidrs=true \
@@ -410,11 +410,6 @@ endif
 ###############################################################################
 # Developer helper scripts (not used by build or test)
 ###############################################################################
-## Run kube-proxy
-run-kube-proxy:
-	-docker rm -f calico-kube-proxy
-	docker run --name calico-kube-proxy -d --net=host --privileged gcr.io/google_containers/hyperkube:$(K8S_VERSION) kube-proxy --master=http://127.0.0.1:8080 --v=2
-
 .PHONY: test-watch
 ## Run the unit tests, watching for changes.
 test-watch: $(BIN)/install run-etcd run-k8s-apiserver
