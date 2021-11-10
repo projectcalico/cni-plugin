@@ -18,7 +18,6 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 
-	"os"
 	"testing"
 
 	"github.com/onsi/ginkgo/reporters"
@@ -26,6 +25,6 @@ import (
 
 func TestCalicoCni(t *testing.T) {
 	RegisterFailHandler(Fail)
-	junitReporter := reporters.NewJUnitReporter(os.Getenv("REPORT"))
+	junitReporter := reporters.NewJUnitReporter("../report/win_suite.xml")
 	RunSpecsWithDefaultAndCustomReporters(t, "CalicoCni windows Suite", []Reporter{junitReporter})
 }
