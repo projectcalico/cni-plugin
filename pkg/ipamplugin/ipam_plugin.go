@@ -274,6 +274,9 @@ func cmdAdd(args *skel.CmdArgs) error {
 			return calicoClient.IPAM().AutoAssign(ctx, assignArgs)
 		}
 		v4Assignments, v6Assignments, err := autoAssignWithLock(calicoClient, ctx, assignArgs)
+		if err != nil {
+			return err
+		}
 		var v4ips, v6ips []cnet.IPNet
 		if v4Assignments != nil {
 			v4ips = v4Assignments.IPs
@@ -282,9 +285,6 @@ func cmdAdd(args *skel.CmdArgs) error {
 			v6ips = v6Assignments.IPs
 		}
 		logger.Infof("Calico CNI IPAM assigned addresses IPv4=%v IPv6=%v", v4ips, v6ips)
-		if err != nil {
-			return err
-		}
 
 		// Check if IPv4 address assignment fails but IPv6 address assignment succeeds. Release IPs for the successful IPv6 address assignment.
 		if num4 == 1 && v4Assignments != nil && len(v4Assignments.IPs) < num4 {
