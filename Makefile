@@ -1,5 +1,5 @@
 PACKAGE_NAME=github.com/projectcalico/cni-plugin
-GO_BUILD_VER=v0.54
+GO_BUILD_VER=v0.65.1
 
 ORGANIZATION=projectcalico
 SEMAPHORE_PROJECT_ID?=$(SEMAPHORE_CNI_PLUGIN_PROJECT_ID)
@@ -49,6 +49,9 @@ $(LOCAL_BUILD_DEP):
 endif
 
 include Makefile.common
+
+# Override K8S_VERSION to last available hyperkube.
+K8S_VERSION = v1.18.6
 
 ###############################################################################
 
