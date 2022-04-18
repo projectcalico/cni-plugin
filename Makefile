@@ -50,6 +50,9 @@ endif
 
 include Makefile.common
 
+# Override K8S_VERSION to last available hyperkube.
+K8S_VERSION = v1.18.6
+
 ###############################################################################
 
 # fail if unable to download
